@@ -203,14 +203,14 @@ public enum MarkdownRenderer {
                 continue
             }
 
-            if leadingSpaces >= 4 {
+            let listItemIndentation = listItemIndentation(in: line)
+            if leadingSpaces >= 4, listItemIndentation == nil {
                 lastListItemIndentation = nil
                 blankLineAfterListItem = false
                 continue
             }
 
             let isBlank = trimmedLine.isEmpty
-            let listItemIndentation = listItemIndentation(in: line)
 
             if let listItemIndentation,
                let lastListItemIndentation,
@@ -236,7 +236,7 @@ public enum MarkdownRenderer {
 
     private static func listItemIndentation(in line: String) -> Int? {
         guard line.range(
-            of: #"^[ ]{0,3}(?:[*+-]|\d+[.)])[ \t]+"#,
+            of: #"^[ ]*(?:[*+-]|\d+[.)])[ \t]+"#,
             options: .regularExpression
         ) != nil else {
             return nil

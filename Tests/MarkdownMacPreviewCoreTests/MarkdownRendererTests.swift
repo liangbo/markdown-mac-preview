@@ -214,6 +214,22 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertNil(result.warning)
     }
 
+    func testNestedChildReturnToParentContinuationDoesNotConsumeSiblingTransition() {
+        let markdown = """
+        - parent one
+          - child
+
+          continuation
+
+        - parent two
+        """
+
+        let result = MarkdownRenderer.render(markdown)
+        let rendered = String(result.attributed.characters)
+        XCTAssertTrue(rendered.contains("continuation\n\nparent two"))
+        XCTAssertNil(result.warning)
+    }
+
     func testSeparatorsSurroundListWithoutSplittingListItems() {
         let markdown = "# Title\n\n- one\n- two\n\nAfter paragraph"
 

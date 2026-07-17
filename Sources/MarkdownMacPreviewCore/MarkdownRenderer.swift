@@ -48,6 +48,7 @@ public enum MarkdownRenderer {
         let listTransitions = listItemTransitions(in: markdown)
         var nextListTransition = 0
         var previousIntent: PresentationIntent?
+        var lastListItemByContainer: [Int: Int] = [:]
 
         for run in attributed.runs {
             let intent = run.presentationIntent
@@ -56,9 +57,13 @@ public enum MarkdownRenderer {
             let currentListItemIdentity = listItemIdentity(in: intent)
             let sharesListContainer = previousListContainerIdentity != nil &&
                 previousListContainerIdentity == currentListContainerIdentity
-            let isListItemTransition = sharesListContainer &&
-                previousListItemIdentity != nil &&
-                previousListItemIdentity != currentListItemIdentity
+            let isSiblingListItemTransition = if let currentListContainerIdentity,
+                                                  let currentListItemIdentity {
+                lastListItemByContainer[currentListContainerIdentity] != nil &&
+                    lastListItemByContainer[currentListContainerIdentity] != currentListItemIdentity
+            } else {
+                false
+            }
             let isSameListItem = sharesListContainer &&
                 previousListItemIdentity != nil &&
                 previousListItemIdentity == currentListItemIdentity
@@ -69,8 +74,7 @@ public enum MarkdownRenderer {
                     in: previousIntent,
                     identity: currentListContainerIdentity!
                 )
-            let isQueuedListTransition = isListItemTransition || isReturningToListContainer
-            let isLooseListTransition = isQueuedListTransition &&
+            let isLooseListTransition = isSiblingListItemTransition &&
                 nextListTransition < listTransitions.count &&
                 listTransitions[nextListTransition].isLoose
             let isBlockTransition = previousBlockIdentity != blockIdentity
@@ -106,8 +110,13 @@ public enum MarkdownRenderer {
                 }
             }
 
-            if isQueuedListTransition {
+            if isSiblingListItemTransition {
                 nextListTransition += 1
+            }
+
+            if let currentListContainerIdentity,
+               let currentListItemIdentity {
+                lastListItemByContainer[currentListContainerIdentity] = currentListItemIdentity
             }
 
             previousBlockIdentity = blockIdentity

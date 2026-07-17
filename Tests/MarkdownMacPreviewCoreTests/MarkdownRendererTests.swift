@@ -29,6 +29,24 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertEqual(result.warning, "Markdown preview fell back to plain text.")
     }
 
+    func testFencedCodeBlockWithBlankLinePreservesCodeContent() {
+        let markdown = """
+        # Title
+
+        ```swift
+        let a = 1
+
+        let b = 2
+        ```
+        """
+
+        let result = MarkdownRenderer.render(markdown)
+        let rendered = String(result.attributed.characters)
+
+        XCTAssertEqual(rendered, "Title\n\nlet a = 1\n\nlet b = 2\n")
+        XCTAssertNil(result.warning)
+    }
+
     private enum TestError: Error {
         case parserFailed
     }

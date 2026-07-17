@@ -6,6 +6,7 @@ struct StatusBarView: View {
     let isDirty: Bool
     let stats: MarkdownStats
     let errorMessage: String?
+    let warningMessage: String?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -23,6 +24,10 @@ struct StatusBarView: View {
             if let errorMessage {
                 Text(errorMessage)
                     .foregroundStyle(.red)
+                    .lineLimit(1)
+            } else if let warningMessage {
+                Text(warningMessage)
+                    .foregroundStyle(.orange)
                     .lineLimit(1)
             } else {
                 Text("\(stats.words) words")

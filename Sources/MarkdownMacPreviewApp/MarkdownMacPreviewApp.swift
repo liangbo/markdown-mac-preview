@@ -3,10 +3,11 @@ import SwiftUI
 
 @main
 @MainActor
-final class MarkdownMacPreviewApplication: NSObject, NSApplicationDelegate {
+final class MarkdownMacPreviewApplication: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private static var sharedDelegate: MarkdownMacPreviewApplication?
     private let viewModel = AppViewModel()
     private var window: NSWindow?
+    private var mayTerminateWithoutConfirmation = false
 
     static func main() {
         let application = NSApplication.shared
@@ -32,6 +33,7 @@ final class MarkdownMacPreviewApplication: NSObject, NSApplicationDelegate {
         )
         window.title = "Markdown Mac Preview"
         window.contentView = NSHostingView(rootView: contentView)
+        window.delegate = self
         window.center()
         window.makeKeyAndOrderFront(nil)
         self.window = window
@@ -41,6 +43,21 @@ final class MarkdownMacPreviewApplication: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if mayTerminateWithoutConfirmation {
+            return .terminateNow
+        }
+
+        return viewModel.confirmDiscardIfNeeded() ? .terminateNow : .terminateCancel
+    }
+
+    @objc
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        let shouldClose = viewModel.confirmDiscardIfNeeded()
+        mayTerminateWithoutConfirmation = shouldClose
+        return shouldClose
     }
 
     private func buildMainMenu() -> NSMenu {

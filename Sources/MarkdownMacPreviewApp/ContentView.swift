@@ -29,7 +29,8 @@ struct ContentView: View {
                 fileName: viewModel.document?.fileName,
                 isDirty: viewModel.document?.isDirty == true,
                 stats: viewModel.document?.stats ?? MarkdownStats(),
-                errorMessage: viewModel.errorMessage
+                errorMessage: viewModel.errorMessage,
+                warningMessage: viewModel.previewContent.warning
             )
         }
     }

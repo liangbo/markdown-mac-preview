@@ -32,6 +32,10 @@ final class AppViewModel: ObservableObject {
             return
         }
 
+        guard confirmDiscardIfNeeded() else {
+            return
+        }
+
         loadDocument(from: url)
     }
 
@@ -60,6 +64,31 @@ final class AppViewModel: ObservableObject {
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    func confirmDiscardIfNeeded() -> Bool {
+        guard document?.isDirty == true else {
+            return true
+        }
+
+        let alert = NSAlert()
+        alert.messageText = "Save changes?"
+        alert.informativeText = "Do you want to save changes to \(document?.fileName ?? "this document") before continuing?"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Discard")
+        alert.addButton(withTitle: "Cancel")
+
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            saveDocument()
+            return document?.isDirty != true && errorMessage == nil
+        case .alertSecondButtonReturn:
+            errorMessage = nil
+            return true
+        default:
+            return false
         }
     }
 

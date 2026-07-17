@@ -4,6 +4,7 @@ import SwiftUI
 @main
 @MainActor
 final class MarkdownMacPreviewApplication: NSObject, NSApplicationDelegate {
+    private static var sharedDelegate: MarkdownMacPreviewApplication?
     private let viewModel = AppViewModel()
     private var window: NSWindow?
 
@@ -12,6 +13,7 @@ final class MarkdownMacPreviewApplication: NSObject, NSApplicationDelegate {
         application.setActivationPolicy(.regular)
 
         let delegate = MarkdownMacPreviewApplication()
+        sharedDelegate = delegate
         application.delegate = delegate
         application.mainMenu = delegate.buildMainMenu()
         application.run()

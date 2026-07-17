@@ -26,7 +26,7 @@ public enum MarkdownRenderer {
     ) -> MarkdownPreviewContent {
         do {
             var attributed = try parser(markdown)
-            insertMissingBlockSeparators(into: &attributed)
+            insertMissingBlockSeparators(into: &attributed, markdown: markdown)
             return MarkdownPreviewContent(attributed: attributed)
         } catch {
             return MarkdownPreviewContent(
@@ -36,22 +36,33 @@ public enum MarkdownRenderer {
         }
     }
 
-    private static func insertMissingBlockSeparators(into attributed: inout AttributedString) {
+    private static func insertMissingBlockSeparators(
+        into attributed: inout AttributedString,
+        markdown: String
+    ) {
         var insertions: [(offset: Int, count: Int)] = []
         var offset = 0
         var previousBlockIdentity: Int?
         var previousListContainerIdentity: Int?
+        var previousListItemIdentity: Int?
+        var looseListTransitions = looseListItemTransitionCount(in: markdown)
 
         for run in attributed.runs {
             let intent = run.presentationIntent
             let blockIdentity = intent?.components.last?.identity
             let currentListContainerIdentity = listContainerIdentity(in: intent)
+            let currentListItemIdentity = listItemIdentity(in: intent)
+            let sharesListContainer = previousListContainerIdentity != nil &&
+                previousListContainerIdentity == currentListContainerIdentity
+            let isLooseListTransition = sharesListContainer &&
+                previousListItemIdentity != nil &&
+                previousListItemIdentity != currentListItemIdentity &&
+                looseListTransitions > 0
+            let isBlockTransition = previousBlockIdentity != blockIdentity
 
-            if let previousBlockIdentity,
-               let blockIdentity,
-               previousBlockIdentity != blockIdentity,
-               previousListContainerIdentity == nil ||
-                   previousListContainerIdentity != currentListContainerIdentity {
+            if previousBlockIdentity != nil,
+               blockIdentity != nil,
+               (isBlockTransition && !sharesListContainer) || isLooseListTransition {
                 let trailingNewlines = trailingNewlineCount(
                     in: attributed.characters,
                     before: offset
@@ -61,8 +72,13 @@ public enum MarkdownRenderer {
                 }
             }
 
+            if isLooseListTransition {
+                looseListTransitions -= 1
+            }
+
             previousBlockIdentity = blockIdentity
             previousListContainerIdentity = currentListContainerIdentity
+            previousListItemIdentity = currentListItemIdentity
             offset += attributed.characters[run.range].count
         }
 
@@ -99,6 +115,47 @@ public enum MarkdownRenderer {
         }
 
         return nil
+    }
+
+    private static func listItemIdentity(in intent: PresentationIntent?) -> Int? {
+        guard let intent else {
+            return nil
+        }
+
+        for component in intent.components {
+            if case .listItem = component.kind {
+                return component.identity
+            }
+        }
+
+        return nil
+    }
+
+    private static func looseListItemTransitionCount(in markdown: String) -> Int {
+        var transitions = 0
+        var lastNonBlankLineWasListItem = false
+        var blankLineAfterListItem = false
+
+        for line in markdown.components(separatedBy: .newlines) {
+            let isBlank = line.trimmingCharacters(in: .whitespaces).isEmpty
+            let isListItem = line.range(
+                of: #"^[ ]{0,3}(?:[*+-]|\d+[.)])[ \t]+"#,
+                options: .regularExpression
+            ) != nil
+
+            if isListItem && lastNonBlankLineWasListItem && blankLineAfterListItem {
+                transitions += 1
+            }
+
+            if isBlank {
+                blankLineAfterListItem = lastNonBlankLineWasListItem
+            } else {
+                blankLineAfterListItem = false
+                lastNonBlankLineWasListItem = isListItem
+            }
+        }
+
+        return transitions
     }
 
     private static func trailingNewlineCount(

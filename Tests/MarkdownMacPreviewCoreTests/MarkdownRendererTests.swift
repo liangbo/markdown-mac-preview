@@ -114,6 +114,14 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertNil(result.warning)
     }
 
+    func testLooseListPreservesBlankLineBetweenItems() {
+        let result = MarkdownRenderer.render("- one\n\n- two")
+        let rendered = String(result.attributed.characters)
+
+        XCTAssertTrue(rendered.contains("one\n\ntwo"))
+        XCTAssertNil(result.warning)
+    }
+
     func testSeparatorsSurroundListWithoutSplittingListItems() {
         let markdown = "# Title\n\n- one\n- two\n\nAfter paragraph"
 

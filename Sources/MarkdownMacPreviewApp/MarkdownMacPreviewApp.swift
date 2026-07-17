@@ -2,24 +2,93 @@ import AppKit
 import SwiftUI
 
 @main
-struct MarkdownMacPreviewApp: App {
-    @StateObject private var viewModel = AppViewModel()
+@MainActor
+final class MarkdownMacPreviewApplication: NSObject, NSApplicationDelegate {
+    private let viewModel = AppViewModel()
+    private var window: NSWindow?
 
-    init() {
-        NSApplication.shared.setActivationPolicy(.regular)
+    static func main() {
+        let application = NSApplication.shared
+        application.setActivationPolicy(.regular)
+
+        let delegate = MarkdownMacPreviewApplication()
+        application.delegate = delegate
+        application.mainMenu = delegate.buildMainMenu()
+        application.run()
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        let contentView = ContentView()
+            .environmentObject(viewModel)
+            .frame(minWidth: 900, minHeight: 600)
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Markdown Mac Preview"
+        window.contentView = NSHostingView(rootView: contentView)
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        self.window = window
+
         NSApplication.shared.activate(ignoringOtherApps: true)
     }
 
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-                .environmentObject(viewModel)
-                .frame(minWidth: 900, minHeight: 600)
-        }
-        .windowStyle(.titleBar)
-        .commands {
-            AppCommands()
-        }
-        .environment(\.appViewModel, viewModel)
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        true
+    }
+
+    private func buildMainMenu() -> NSMenu {
+        let mainMenu = NSMenu()
+
+        let appMenuItem = NSMenuItem()
+        let appMenu = NSMenu()
+        appMenu.addItem(
+            withTitle: "Quit Markdown Mac Preview",
+            action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q"
+        )
+        appMenuItem.submenu = appMenu
+        mainMenu.addItem(appMenuItem)
+
+        let fileMenuItem = NSMenuItem(title: "File", action: nil, keyEquivalent: "")
+        let fileMenu = NSMenu(title: "File")
+        let openItem = NSMenuItem(title: "Open...", action: #selector(openDocument(_:)), keyEquivalent: "o")
+        openItem.target = self
+        fileMenu.addItem(openItem)
+        let saveItem = NSMenuItem(title: "Save", action: #selector(saveDocument(_:)), keyEquivalent: "s")
+        saveItem.target = self
+        fileMenu.addItem(saveItem)
+        fileMenuItem.submenu = fileMenu
+        mainMenu.addItem(fileMenuItem)
+
+        let viewMenuItem = NSMenuItem(title: "View", action: nil, keyEquivalent: "")
+        let viewMenu = NSMenu(title: "View")
+        let toggleEditorItem = NSMenuItem(
+            title: "Toggle Editor",
+            action: #selector(toggleEditor(_:)),
+            keyEquivalent: "e"
+        )
+        toggleEditorItem.target = self
+        viewMenu.addItem(toggleEditorItem)
+        viewMenuItem.submenu = viewMenu
+        mainMenu.addItem(viewMenuItem)
+
+        return mainMenu
+    }
+
+    @objc private func openDocument(_ sender: Any?) {
+        viewModel.openDocument()
+    }
+
+    @objc private func saveDocument(_ sender: Any?) {
+        viewModel.saveDocument()
+    }
+
+    @objc private func toggleEditor(_ sender: Any?) {
+        viewModel.toggleEditor()
     }
 }

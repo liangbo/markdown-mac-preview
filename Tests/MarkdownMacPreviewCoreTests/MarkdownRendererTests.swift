@@ -168,6 +168,22 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertNil(result.warning)
     }
 
+    func testNestedLooseListUsesInnermostListContainer() {
+        let markdown = """
+        - parent
+          - child one
+
+          - child two
+        """
+
+        let result = MarkdownRenderer.render(markdown)
+        let rendered = String(result.attributed.characters)
+
+        XCTAssertFalse(rendered.contains("parent\n\nchild one"))
+        XCTAssertTrue(rendered.contains("child one\n\nchild two"))
+        XCTAssertNil(result.warning)
+    }
+
     func testSeparatorsSurroundListWithoutSplittingListItems() {
         let markdown = "# Title\n\n- one\n- two\n\nAfter paragraph"
 

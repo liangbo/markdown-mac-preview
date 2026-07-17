@@ -47,6 +47,7 @@ public enum MarkdownRenderer {
         var previousListItemIdentity: Int?
         let listTransitions = listItemTransitions(in: markdown)
         var nextListTransition = 0
+        var previousIntent: PresentationIntent?
 
         for run in attributed.runs {
             let intent = run.presentationIntent
@@ -65,7 +66,19 @@ public enum MarkdownRenderer {
                 nextListTransition < listTransitions.count &&
                 listTransitions[nextListTransition].isLoose
             let isBlockTransition = previousBlockIdentity != blockIdentity
-            let shouldInsertSeparator = if sharesListContainer {
+            let isNestedListTransition = previousListContainerIdentity != nil &&
+                currentListContainerIdentity != nil &&
+                previousListContainerIdentity != currentListContainerIdentity &&
+                (containsListContainer(
+                    in: intent,
+                    identity: previousListContainerIdentity!
+                ) || containsListContainer(
+                    in: previousIntent,
+                    identity: currentListContainerIdentity!
+                ))
+            let shouldInsertSeparator = if isNestedListTransition {
+                false
+            } else if sharesListContainer {
                 (isSameListItem && isBlockTransition) || isLooseListTransition
             } else {
                 isBlockTransition
@@ -90,6 +103,7 @@ public enum MarkdownRenderer {
             previousBlockIdentity = blockIdentity
             previousListContainerIdentity = currentListContainerIdentity
             previousListItemIdentity = currentListItemIdentity
+            previousIntent = intent
             offset += attributed.characters[run.range].count
         }
 
@@ -116,7 +130,7 @@ public enum MarkdownRenderer {
             return nil
         }
 
-        for component in intent.components.reversed() {
+        for component in intent.components {
             switch component.kind {
             case .orderedList, .unorderedList:
                 return component.identity
@@ -126,6 +140,20 @@ public enum MarkdownRenderer {
         }
 
         return nil
+    }
+
+    private static func containsListContainer(
+        in intent: PresentationIntent?,
+        identity: Int
+    ) -> Bool {
+        intent?.components.contains { component in
+            switch component.kind {
+            case .orderedList, .unorderedList:
+                return component.identity == identity
+            default:
+                return false
+            }
+        } ?? false
     }
 
     private static func listItemIdentity(in intent: PresentationIntent?) -> Int? {

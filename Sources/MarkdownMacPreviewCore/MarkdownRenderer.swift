@@ -50,24 +50,30 @@ public enum MarkdownRenderer {
 
         for run in attributed.runs {
             let intent = run.presentationIntent
-            let blockIdentity = intent?.components.last?.identity
+            let blockIdentity = intent?.components.first?.identity
             let currentListContainerIdentity = listContainerIdentity(in: intent)
             let currentListItemIdentity = listItemIdentity(in: intent)
             let sharesListContainer = previousListContainerIdentity != nil &&
                 previousListContainerIdentity == currentListContainerIdentity
-            let isLooseListTransition = sharesListContainer &&
-                previousListItemIdentity != nil &&
-                previousListItemIdentity != currentListItemIdentity &&
-                nextListTransition < listTransitions.count &&
-                listTransitions[nextListTransition]
             let isListItemTransition = sharesListContainer &&
                 previousListItemIdentity != nil &&
                 previousListItemIdentity != currentListItemIdentity
+            let isSameListItem = sharesListContainer &&
+                previousListItemIdentity != nil &&
+                previousListItemIdentity == currentListItemIdentity
+            let isLooseListTransition = isListItemTransition &&
+                nextListTransition < listTransitions.count &&
+                listTransitions[nextListTransition]
             let isBlockTransition = previousBlockIdentity != blockIdentity
+            let shouldInsertSeparator = if sharesListContainer {
+                (isSameListItem && isBlockTransition) || isLooseListTransition
+            } else {
+                isBlockTransition
+            }
 
             if previousBlockIdentity != nil,
                blockIdentity != nil,
-               (isBlockTransition && !sharesListContainer) || isLooseListTransition {
+               shouldInsertSeparator {
                 let trailingNewlines = trailingNewlineCount(
                     in: attributed.characters,
                     before: offset

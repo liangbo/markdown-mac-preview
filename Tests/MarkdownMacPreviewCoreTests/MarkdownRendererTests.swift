@@ -143,6 +143,14 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertNil(result.warning)
     }
 
+    func testListItemParagraphsPreserveSeparationWithinSameItem() {
+        let result = MarkdownRenderer.render("- one\n\n  continuation")
+        let rendered = String(result.attributed.characters)
+
+        XCTAssertTrue(rendered.contains("one\n\ncontinuation"))
+        XCTAssertNil(result.warning)
+    }
+
     func testSeparatorsSurroundListWithoutSplittingListItems() {
         let markdown = "# Title\n\n- one\n- two\n\nAfter paragraph"
 

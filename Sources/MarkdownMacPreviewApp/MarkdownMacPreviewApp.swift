@@ -1,8 +1,14 @@
+import AppKit
 import SwiftUI
 
 @main
 struct MarkdownMacPreviewApp: App {
     @StateObject private var viewModel = AppViewModel()
+
+    init() {
+        NSApplication.shared.setActivationPolicy(.regular)
+        NSApplication.shared.activate(ignoringOtherApps: true)
+    }
 
     var body: some Scene {
         WindowGroup {

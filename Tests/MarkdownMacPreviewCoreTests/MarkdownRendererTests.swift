@@ -199,6 +199,21 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertNil(result.warning)
     }
 
+    func testParentListContextSurvivesNestedChildContent() {
+        let markdown = """
+        - parent one
+          - child
+
+        - parent two
+        """
+
+        let result = MarkdownRenderer.render(markdown)
+        let rendered = String(result.attributed.characters)
+
+        XCTAssertTrue(rendered.contains("child\n\nparent two"))
+        XCTAssertNil(result.warning)
+    }
+
     func testSeparatorsSurroundListWithoutSplittingListItems() {
         let markdown = "# Title\n\n- one\n- two\n\nAfter paragraph"
 

@@ -62,7 +62,15 @@ public enum MarkdownRenderer {
             let isSameListItem = sharesListContainer &&
                 previousListItemIdentity != nil &&
                 previousListItemIdentity == currentListItemIdentity
-            let isLooseListTransition = isListItemTransition &&
+            let isReturningToListContainer = !sharesListContainer &&
+                previousListContainerIdentity != nil &&
+                currentListContainerIdentity != nil &&
+                containsListContainer(
+                    in: previousIntent,
+                    identity: currentListContainerIdentity!
+                )
+            let isQueuedListTransition = isListItemTransition || isReturningToListContainer
+            let isLooseListTransition = isQueuedListTransition &&
                 nextListTransition < listTransitions.count &&
                 listTransitions[nextListTransition].isLoose
             let isBlockTransition = previousBlockIdentity != blockIdentity
@@ -76,10 +84,12 @@ public enum MarkdownRenderer {
                     in: previousIntent,
                     identity: currentListContainerIdentity!
                 ))
-            let shouldInsertSeparator = if isNestedListTransition {
+            let shouldInsertSeparator = if isNestedListTransition && !isReturningToListContainer {
                 false
             } else if sharesListContainer {
                 (isSameListItem && isBlockTransition) || isLooseListTransition
+            } else if isReturningToListContainer {
+                isLooseListTransition
             } else {
                 isBlockTransition
             }
@@ -96,7 +106,7 @@ public enum MarkdownRenderer {
                 }
             }
 
-            if isListItemTransition {
+            if isQueuedListTransition {
                 nextListTransition += 1
             }
 
@@ -171,14 +181,17 @@ public enum MarkdownRenderer {
     }
 
     private struct ListTransition {
-        let indentation: Int
         let isLoose: Bool
+    }
+
+    private struct ListContext {
+        var hasListItem = false
+        var blankLineAfterListItem = false
     }
 
     private static func listItemTransitions(in markdown: String) -> [ListTransition] {
         var transitions: [ListTransition] = []
-        var lastListItemIndentation: Int?
-        var blankLineAfterListItem = false
+        var contexts: [Int: ListContext] = [:]
         var fence: FenceMarker?
 
         for rawLine in markdown.components(separatedBy: "\n") {
@@ -198,36 +211,35 @@ public enum MarkdownRenderer {
 
             if leadingSpaces <= 3, let openingFence = fenceMarker(in: trimmedLine) {
                 fence = openingFence
-                lastListItemIndentation = nil
-                blankLineAfterListItem = false
+                contexts.removeAll()
                 continue
             }
 
             let listItemIndentation = listItemIndentation(in: line)
             if leadingSpaces >= 4, listItemIndentation == nil {
-                lastListItemIndentation = nil
-                blankLineAfterListItem = false
+                contexts = contexts.filter { $0.key < leadingSpaces }
                 continue
             }
 
             let isBlank = trimmedLine.isEmpty
 
-            if let listItemIndentation,
-               let lastListItemIndentation,
-               listItemIndentation == lastListItemIndentation {
-                transitions.append(
-                    ListTransition(
-                        indentation: listItemIndentation,
-                        isLoose: blankLineAfterListItem
-                    )
-                )
-            }
-
             if isBlank {
-                blankLineAfterListItem = lastListItemIndentation != nil
+                for indentation in contexts.keys {
+                    contexts[indentation]?.blankLineAfterListItem = true
+                }
+            } else if let listItemIndentation {
+                contexts = contexts.filter { $0.key <= listItemIndentation }
+                var context = contexts[listItemIndentation] ?? ListContext()
+                if context.hasListItem {
+                    transitions.append(
+                        ListTransition(isLoose: context.blankLineAfterListItem)
+                    )
+                }
+                context.hasListItem = true
+                context.blankLineAfterListItem = false
+                contexts[listItemIndentation] = context
             } else {
-                blankLineAfterListItem = false
-                lastListItemIndentation = listItemIndentation
+                contexts = contexts.filter { $0.key < leadingSpaces }
             }
         }
 

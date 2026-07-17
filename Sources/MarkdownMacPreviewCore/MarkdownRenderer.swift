@@ -239,6 +239,7 @@ public enum MarkdownRenderer {
             let listMarker = listMarker(in: line)
             if leadingSpaces >= 4, listMarker == nil {
                 contexts = contexts.filter { $0.key < leadingSpaces }
+                blankLinePending = false
                 continue
             }
 

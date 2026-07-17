@@ -114,6 +114,18 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertNil(result.warning)
     }
 
+    func testIndentedCodeAfterBlankLineDoesNotMakeLaterListSiblingLoose() {
+        let markdown = "- one\n\n    continuation\n- two"
+
+        let result = MarkdownRenderer.render(markdown)
+        let rendered = String(result.attributed.characters)
+
+        XCTAssertTrue(rendered.contains("one"))
+        XCTAssertTrue(rendered.contains("two"))
+        XCTAssertFalse(rendered.contains("continuation\n\ntwo"))
+        XCTAssertNil(result.warning)
+    }
+
     func testLooseListPreservesBlankLineBetweenItems() {
         let result = MarkdownRenderer.render("- one\n\n- two")
         let rendered = String(result.attributed.characters)

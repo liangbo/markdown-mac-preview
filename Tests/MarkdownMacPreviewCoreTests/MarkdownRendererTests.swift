@@ -230,6 +230,32 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertNil(result.warning)
     }
 
+    func testListFamilyBoundaryDoesNotPoisonFollowingCompactList() {
+        let markdown = """
+        - first
+        - second
+
+        1. ordered
+
+        - real one
+        - real two
+        """
+
+        let result = MarkdownRenderer.render(markdown)
+        let rendered = String(result.attributed.characters)
+
+        XCTAssertFalse(rendered.contains("real one\n\nreal two"))
+        XCTAssertNil(result.warning)
+    }
+
+    func testNestedChildReturnToParentContinuationPreservesParagraphSeparation() {
+        let result = MarkdownRenderer.render("- parent\n  - child\n\n  continuation")
+        let rendered = String(result.attributed.characters)
+
+        XCTAssertTrue(rendered.contains("child\n\ncontinuation"))
+        XCTAssertNil(result.warning)
+    }
+
     func testSeparatorsSurroundListWithoutSplittingListItems() {
         let markdown = "# Title\n\n- one\n- two\n\nAfter paragraph"
 

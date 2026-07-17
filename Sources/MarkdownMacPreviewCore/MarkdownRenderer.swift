@@ -78,6 +78,11 @@ public enum MarkdownRenderer {
                 nextListTransition < listTransitions.count &&
                 listTransitions[nextListTransition].isLoose
             let isBlockTransition = previousBlockIdentity != blockIdentity
+            let isParentContinuationTransition = isReturningToListContainer &&
+                isBlockTransition &&
+                currentListContainerIdentity.flatMap {
+                    lastListItemByContainer[$0]
+                } == currentListItemIdentity
             let isNestedListTransition = previousListContainerIdentity != nil &&
                 currentListContainerIdentity != nil &&
                 previousListContainerIdentity != currentListContainerIdentity &&
@@ -93,7 +98,7 @@ public enum MarkdownRenderer {
             } else if sharesListContainer {
                 (isSameListItem && isBlockTransition) || isLooseListTransition
             } else if isReturningToListContainer {
-                isLooseListTransition
+                isLooseListTransition || isParentContinuationTransition
             } else {
                 isBlockTransition
             }
@@ -196,6 +201,12 @@ public enum MarkdownRenderer {
     private struct ListContext {
         var hasListItem = false
         var blankLineAfterListItem = false
+        var markerKind: ListMarkerKind?
+    }
+
+    private enum ListMarkerKind: Equatable {
+        case ordered
+        case unordered
     }
 
     private static func listItemTransitions(in markdown: String) -> [ListTransition] {
@@ -224,8 +235,8 @@ public enum MarkdownRenderer {
                 continue
             }
 
-            let listItemIndentation = listItemIndentation(in: line)
-            if leadingSpaces >= 4, listItemIndentation == nil {
+            let listMarker = listMarker(in: line)
+            if leadingSpaces >= 4, listMarker == nil {
                 contexts = contexts.filter { $0.key < leadingSpaces }
                 continue
             }
@@ -236,17 +247,18 @@ public enum MarkdownRenderer {
                 for indentation in contexts.keys {
                     contexts[indentation]?.blankLineAfterListItem = true
                 }
-            } else if let listItemIndentation {
-                contexts = contexts.filter { $0.key <= listItemIndentation }
-                var context = contexts[listItemIndentation] ?? ListContext()
-                if context.hasListItem {
+            } else if let listMarker {
+                contexts = contexts.filter { $0.key <= listMarker.indentation }
+                var context = contexts[listMarker.indentation] ?? ListContext()
+                if context.hasListItem, context.markerKind == listMarker.kind {
                     transitions.append(
                         ListTransition(isLoose: context.blankLineAfterListItem)
                     )
                 }
                 context.hasListItem = true
                 context.blankLineAfterListItem = false
-                contexts[listItemIndentation] = context
+                context.markerKind = listMarker.kind
+                contexts[listMarker.indentation] = context
             } else {
                 contexts = contexts.filter { $0.key < leadingSpaces }
             }
@@ -255,15 +267,24 @@ public enum MarkdownRenderer {
         return transitions
     }
 
-    private static func listItemIndentation(in line: String) -> Int? {
-        guard line.range(
-            of: #"^[ ]*(?:[*+-]|\d+[.)])[ \t]+"#,
-            options: .regularExpression
-        ) != nil else {
-            return nil
+    private struct ListMarker {
+        let indentation: Int
+        let kind: ListMarkerKind
+    }
+
+    private static func listMarker(in line: String) -> ListMarker? {
+        let indentation = line.prefix { $0 == " " }.count
+        let marker = String(line.dropFirst(indentation))
+
+        if marker.range(of: #"^(?:[*+-])[ \t]+"#, options: .regularExpression) != nil {
+            return ListMarker(indentation: indentation, kind: .unordered)
         }
 
-        return line.prefix { $0 == " " }.count
+        if marker.range(of: #"^\d+[.)][ \t]+"#, options: .regularExpression) != nil {
+            return ListMarker(indentation: indentation, kind: .ordered)
+        }
+
+        return nil
     }
 
     private struct FenceMarker {

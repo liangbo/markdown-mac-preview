@@ -87,6 +87,23 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertNil(result.warning)
     }
 
+    func testCRLFHeadingAndParagraphPreserveSeparator() {
+        let result = MarkdownRenderer.render("# Title\r\n\r\nThis is **bold** text.")
+
+        XCTAssertEqual(String(result.attributed.characters), "Title\n\nThis is bold text.")
+        XCTAssertNil(result.warning)
+    }
+
+    func testIndentedCodeFenceDoesNotSuppressLaterParagraphSeparator() {
+        let markdown = "    let code = 1\n    ```\n\nAfter paragraph"
+
+        let result = MarkdownRenderer.render(markdown)
+        let rendered = String(result.attributed.characters)
+
+        XCTAssertTrue(rendered.contains("let code = 1\n```\n\nAfter paragraph"))
+        XCTAssertNil(result.warning)
+    }
+
     private enum TestError: Error {
         case parserFailed
     }

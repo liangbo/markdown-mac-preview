@@ -26,36 +26,7 @@ public enum MarkdownRenderer {
     ) -> MarkdownPreviewContent {
         do {
             var attributed = try parser(markdown)
-            var insertedCharacters = 0
-
-            for boundary in topLevelBlankLineBoundaries(in: markdown) {
-                let prefix = String(markdown[..<boundary])
-                guard let renderedPrefix = try? parser(prefix) else {
-                    continue
-                }
-
-                let insertionOffset = renderedPrefix.characters.count + insertedCharacters
-                guard insertionOffset <= attributed.characters.count else {
-                    continue
-                }
-
-                let insertionIndex = attributed.characters.index(
-                    attributed.characters.startIndex,
-                    offsetBy: insertionOffset
-                )
-                let remaining = attributed.characters[attributed.characters.index(
-                    insertionIndex,
-                    offsetBy: 0
-                )...]
-
-                guard String(remaining.prefix(2)) != "\n\n" else {
-                    continue
-                }
-
-                attributed.insert(AttributedString("\n\n"), at: insertionIndex)
-                insertedCharacters += 2
-            }
-
+            insertMissingBlockSeparators(into: &attributed)
             return MarkdownPreviewContent(attributed: attributed)
         } catch {
             return MarkdownPreviewContent(
@@ -65,62 +36,55 @@ public enum MarkdownRenderer {
         }
     }
 
-    private static func topLevelBlankLineBoundaries(in markdown: String) -> [String.Index] {
-        var boundaries: [String.Index] = []
-        var lineStart = markdown.startIndex
-        var inFence: FenceMarker?
-        var previousLineWasBlank = false
+    private static func insertMissingBlockSeparators(into attributed: inout AttributedString) {
+        var insertions: [(offset: Int, count: Int)] = []
+        var offset = 0
+        var previousBlockIdentity: Int?
 
-        while lineStart < markdown.endIndex {
-            let lineEnd = markdown[lineStart...].firstIndex(of: "\n") ?? markdown.endIndex
-            let line = markdown[lineStart..<lineEnd]
-            let trimmedLine = line.trimmingCharacters(in: .whitespaces)
-            let isBlank = trimmedLine.isEmpty
+        for run in attributed.runs {
+            let blockIdentity = run.presentationIntent?.components.last?.identity
 
-            if let fence = inFence {
-                if let closingFence = fenceMarker(in: trimmedLine),
-                   closingFence.character == fence.character,
-                   closingFence.length >= fence.length,
-                   closingFence.suffix.trimmingCharacters(in: .whitespaces).isEmpty {
-                    inFence = nil
+            if let previousBlockIdentity,
+               let blockIdentity,
+               previousBlockIdentity != blockIdentity {
+                let trailingNewlines = trailingNewlineCount(
+                    in: attributed.characters,
+                    before: offset
+                )
+                if trailingNewlines < 2 {
+                    insertions.append((offset, 2 - trailingNewlines))
                 }
-            } else if let openingFence = fenceMarker(in: trimmedLine) {
-                inFence = openingFence
-            } else if isBlank && !previousLineWasBlank {
-                boundaries.append(lineStart)
             }
 
-            previousLineWasBlank = isBlank
-            lineStart = lineEnd == markdown.endIndex
-                ? markdown.endIndex
-                : markdown.index(after: lineEnd)
+            previousBlockIdentity = blockIdentity
+            offset += attributed.characters[run.range].count
         }
 
-        return boundaries
+        for insertion in insertions.reversed() {
+            guard insertion.offset <= attributed.characters.count else {
+                continue
+            }
+
+            let index = attributed.characters.index(
+                attributed.characters.startIndex,
+                offsetBy: insertion.offset
+            )
+            attributed.insert(
+                AttributedString(String(repeating: "\n", count: insertion.count)),
+                at: index
+            )
+        }
     }
 
-    private struct FenceMarker {
-        let character: Character
-        let length: Int
-        let suffix: String
-    }
-
-    private static func fenceMarker(in line: String) -> FenceMarker? {
-        guard let character = line.first, character == "`" || character == "~" else {
-            return nil
+    private static func trailingNewlineCount(
+        in characters: AttributedString.CharacterView,
+        before offset: Int
+    ) -> Int {
+        guard offset <= characters.count else {
+            return 0
         }
 
-        var end = line.startIndex
-        var length = 0
-        while end < line.endIndex, line[end] == character {
-            length += 1
-            end = line.index(after: end)
-        }
-
-        guard length >= 3 else {
-            return nil
-        }
-
-        return FenceMarker(character: character, length: length, suffix: String(line[end...]))
+        let end = characters.index(characters.startIndex, offsetBy: offset)
+        return characters[..<end].reversed().prefix { $0 == "\n" }.count
     }
 }

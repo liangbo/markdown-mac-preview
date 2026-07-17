@@ -35,6 +35,10 @@ public enum MarkdownRenderer {
                 }
 
                 let insertionOffset = renderedPrefix.characters.count + insertedCharacters
+                guard insertionOffset <= attributed.characters.count else {
+                    continue
+                }
+
                 let insertionIndex = attributed.characters.index(
                     attributed.characters.startIndex,
                     offsetBy: insertionOffset
@@ -64,7 +68,7 @@ public enum MarkdownRenderer {
     private static func topLevelBlankLineBoundaries(in markdown: String) -> [String.Index] {
         var boundaries: [String.Index] = []
         var lineStart = markdown.startIndex
-        var inFence: Character?
+        var inFence: FenceMarker?
         var previousLineWasBlank = false
 
         while lineStart < markdown.endIndex {
@@ -74,11 +78,14 @@ public enum MarkdownRenderer {
             let isBlank = trimmedLine.isEmpty
 
             if let fence = inFence {
-                if trimmedLine.hasPrefix(String(repeating: fence, count: 3)) {
+                if let closingFence = fenceMarker(in: trimmedLine),
+                   closingFence.character == fence.character,
+                   closingFence.length >= fence.length,
+                   closingFence.suffix.trimmingCharacters(in: .whitespaces).isEmpty {
                     inFence = nil
                 }
-            } else if trimmedLine.hasPrefix("```") || trimmedLine.hasPrefix("~~~") {
-                inFence = trimmedLine.first
+            } else if let openingFence = fenceMarker(in: trimmedLine) {
+                inFence = openingFence
             } else if isBlank && !previousLineWasBlank {
                 boundaries.append(lineStart)
             }
@@ -90,5 +97,30 @@ public enum MarkdownRenderer {
         }
 
         return boundaries
+    }
+
+    private struct FenceMarker {
+        let character: Character
+        let length: Int
+        let suffix: String
+    }
+
+    private static func fenceMarker(in line: String) -> FenceMarker? {
+        guard let character = line.first, character == "`" || character == "~" else {
+            return nil
+        }
+
+        var end = line.startIndex
+        var length = 0
+        while end < line.endIndex, line[end] == character {
+            length += 1
+            end = line.index(after: end)
+        }
+
+        guard length >= 3 else {
+            return nil
+        }
+
+        return FenceMarker(character: character, length: length, suffix: String(line[end...]))
     }
 }

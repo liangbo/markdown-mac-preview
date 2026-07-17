@@ -47,6 +47,46 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertNil(result.warning)
     }
 
+    func testFourBacktickFenceRequiresMatchingCloser() {
+        let markdown = """
+        # Title
+
+        ````swift
+        let a = 1
+        ```
+
+        let b = 2
+        ````
+        """
+
+        let result = MarkdownRenderer.render(markdown)
+        let rendered = String(result.attributed.characters)
+
+        XCTAssertTrue(rendered.contains("let a = 1\n```\n\nlet b = 2"))
+        XCTAssertFalse(rendered.contains("\n\n\n"))
+        XCTAssertNil(result.warning)
+    }
+
+    func testTildeFenceRequiresWhitespaceOnlyCloserSuffix() {
+        let markdown = """
+        # Title
+
+        ~~~swift
+        let a = 1
+        ~~~not-a-closer
+
+        let b = 2
+        ~~~
+        """
+
+        let result = MarkdownRenderer.render(markdown)
+        let rendered = String(result.attributed.characters)
+
+        XCTAssertTrue(rendered.contains("let a = 1\n~~~not-a-closer\n\nlet b = 2"))
+        XCTAssertFalse(rendered.contains("\n\n\n"))
+        XCTAssertNil(result.warning)
+    }
+
     private enum TestError: Error {
         case parserFailed
     }

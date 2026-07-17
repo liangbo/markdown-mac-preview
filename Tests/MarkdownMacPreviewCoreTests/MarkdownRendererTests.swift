@@ -184,6 +184,23 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertNil(result.warning)
     }
 
+    func testLooseNestedChildrenDoNotMakeParentSiblingsLoose() {
+        let markdown = """
+        - parent one
+          - child one
+
+          - child two
+        - parent two
+        """
+
+        let result = MarkdownRenderer.render(markdown)
+        let rendered = String(result.attributed.characters)
+
+        XCTAssertTrue(rendered.contains("child one\n\nchild two"))
+        XCTAssertFalse(rendered.contains("child two\n\nparent two"))
+        XCTAssertNil(result.warning)
+    }
+
     func testFourSpaceNestedLooseListPreservesSiblingSeparation() {
         let markdown = """
         - parent

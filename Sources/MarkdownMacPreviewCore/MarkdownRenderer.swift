@@ -200,7 +200,6 @@ public enum MarkdownRenderer {
 
     private struct ListContext {
         var hasListItem = false
-        var blankLineAfterListItem = false
         var markerKind: ListMarkerKind?
     }
 
@@ -213,6 +212,7 @@ public enum MarkdownRenderer {
         var transitions: [ListTransition] = []
         var contexts: [Int: ListContext] = [:]
         var fence: FenceMarker?
+        var blankLinePending = false
 
         for rawLine in markdown.components(separatedBy: "\n") {
             let line = rawLine.hasSuffix("\r") ? String(rawLine.dropLast()) : rawLine
@@ -232,6 +232,7 @@ public enum MarkdownRenderer {
             if leadingSpaces <= 3, let openingFence = fenceMarker(in: trimmedLine) {
                 fence = openingFence
                 contexts.removeAll()
+                blankLinePending = false
                 continue
             }
 
@@ -244,23 +245,22 @@ public enum MarkdownRenderer {
             let isBlank = trimmedLine.isEmpty
 
             if isBlank {
-                for indentation in contexts.keys {
-                    contexts[indentation]?.blankLineAfterListItem = true
-                }
+                blankLinePending = true
             } else if let listMarker {
                 contexts = contexts.filter { $0.key <= listMarker.indentation }
                 var context = contexts[listMarker.indentation] ?? ListContext()
                 if context.hasListItem, context.markerKind == listMarker.kind {
                     transitions.append(
-                        ListTransition(isLoose: context.blankLineAfterListItem)
+                        ListTransition(isLoose: blankLinePending)
                     )
                 }
                 context.hasListItem = true
-                context.blankLineAfterListItem = false
                 context.markerKind = listMarker.kind
                 contexts[listMarker.indentation] = context
+                blankLinePending = false
             } else {
                 contexts = contexts.filter { $0.key < leadingSpaces }
+                blankLinePending = false
             }
         }
 

@@ -63,7 +63,7 @@ public enum MarkdownRenderer {
                 previousListItemIdentity == currentListItemIdentity
             let isLooseListTransition = isListItemTransition &&
                 nextListTransition < listTransitions.count &&
-                listTransitions[nextListTransition]
+                listTransitions[nextListTransition].isLoose
             let isBlockTransition = previousBlockIdentity != blockIdentity
             let shouldInsertSeparator = if sharesListContainer {
                 (isSameListItem && isBlockTransition) || isLooseListTransition
@@ -142,9 +142,14 @@ public enum MarkdownRenderer {
         return nil
     }
 
-    private static func listItemTransitions(in markdown: String) -> [Bool] {
-        var transitions: [Bool] = []
-        var lastNonBlankLineWasListItem = false
+    private struct ListTransition {
+        let indentation: Int
+        let isLoose: Bool
+    }
+
+    private static func listItemTransitions(in markdown: String) -> [ListTransition] {
+        var transitions: [ListTransition] = []
+        var lastListItemIndentation: Int?
         var blankLineAfterListItem = false
         var fence: FenceMarker?
 
@@ -165,38 +170,51 @@ public enum MarkdownRenderer {
 
             if leadingSpaces <= 3, let openingFence = fenceMarker(in: trimmedLine) {
                 fence = openingFence
-                lastNonBlankLineWasListItem = false
+                lastListItemIndentation = nil
                 blankLineAfterListItem = false
                 continue
             }
 
             if leadingSpaces >= 4 {
-                lastNonBlankLineWasListItem = false
+                lastListItemIndentation = nil
                 blankLineAfterListItem = false
                 continue
             }
 
             let isBlank = trimmedLine.isEmpty
-            let isListItem = line.range(
-                of: #"^[ ]{0,3}(?:[*+-]|\d+[.)])[ \t]+"#,
-                options: .regularExpression
-            ) != nil
+            let listItemIndentation = listItemIndentation(in: line)
 
-            if isListItem && lastNonBlankLineWasListItem && blankLineAfterListItem {
-                transitions.append(true)
-            } else if isListItem && lastNonBlankLineWasListItem {
-                transitions.append(false)
+            if let listItemIndentation,
+               let lastListItemIndentation,
+               listItemIndentation == lastListItemIndentation {
+                transitions.append(
+                    ListTransition(
+                        indentation: listItemIndentation,
+                        isLoose: blankLineAfterListItem
+                    )
+                )
             }
 
             if isBlank {
-                blankLineAfterListItem = lastNonBlankLineWasListItem
+                blankLineAfterListItem = lastListItemIndentation != nil
             } else {
                 blankLineAfterListItem = false
-                lastNonBlankLineWasListItem = isListItem
+                lastListItemIndentation = listItemIndentation
             }
         }
 
         return transitions
+    }
+
+    private static func listItemIndentation(in line: String) -> Int? {
+        guard line.range(
+            of: #"^[ ]{0,3}(?:[*+-]|\d+[.)])[ \t]+"#,
+            options: .regularExpression
+        ) != nil else {
+            return nil
+        }
+
+        return line.prefix { $0 == " " }.count
     }
 
     private struct FenceMarker {

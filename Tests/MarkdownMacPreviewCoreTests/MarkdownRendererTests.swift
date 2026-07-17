@@ -151,6 +151,23 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertNil(result.warning)
     }
 
+    func testNestedCompactListDoesNotGainSeparatorsFromLooseParent() {
+        let markdown = """
+        - parent
+
+          - child one
+          - child two
+        """
+
+        let result = MarkdownRenderer.render(markdown)
+        let rendered = String(result.attributed.characters)
+
+        XCTAssertTrue(rendered.contains("child one"))
+        XCTAssertTrue(rendered.contains("child two"))
+        XCTAssertFalse(rendered.contains("child one\n\nchild two"))
+        XCTAssertNil(result.warning)
+    }
+
     func testSeparatorsSurroundListWithoutSplittingListItems() {
         let markdown = "# Title\n\n- one\n- two\n\nAfter paragraph"
 

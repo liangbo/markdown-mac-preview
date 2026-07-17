@@ -12,11 +12,29 @@ public struct MarkdownPreviewContent: Equatable {
 
 public enum MarkdownRenderer {
     public static func render(_ markdown: String) -> MarkdownPreviewContent {
-        do {
-            let attributed = try AttributedString(
+        render(markdown, parser: { markdown in
+            try AttributedString(
                 markdown: markdown,
                 options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
             )
+        })
+    }
+
+    static func render(
+        _ markdown: String,
+        parser: (String) throws -> AttributedString
+    ) -> MarkdownPreviewContent {
+        do {
+            var attributed = AttributedString()
+            let blocks = markdown.components(separatedBy: "\n\n")
+
+            for (index, block) in blocks.enumerated() {
+                if index > 0 {
+                    attributed.append(AttributedString("\n\n"))
+                }
+                attributed.append(try parser(block))
+            }
+
             return MarkdownPreviewContent(attributed: attributed)
         } catch {
             return MarkdownPreviewContent(

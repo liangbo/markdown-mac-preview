@@ -40,13 +40,18 @@ public enum MarkdownRenderer {
         var insertions: [(offset: Int, count: Int)] = []
         var offset = 0
         var previousBlockIdentity: Int?
+        var previousListContainerIdentity: Int?
 
         for run in attributed.runs {
-            let blockIdentity = run.presentationIntent?.components.last?.identity
+            let intent = run.presentationIntent
+            let blockIdentity = intent?.components.last?.identity
+            let currentListContainerIdentity = listContainerIdentity(in: intent)
 
             if let previousBlockIdentity,
                let blockIdentity,
-               previousBlockIdentity != blockIdentity {
+               previousBlockIdentity != blockIdentity,
+               previousListContainerIdentity == nil ||
+                   previousListContainerIdentity != currentListContainerIdentity {
                 let trailingNewlines = trailingNewlineCount(
                     in: attributed.characters,
                     before: offset
@@ -57,6 +62,7 @@ public enum MarkdownRenderer {
             }
 
             previousBlockIdentity = blockIdentity
+            previousListContainerIdentity = currentListContainerIdentity
             offset += attributed.characters[run.range].count
         }
 
@@ -74,6 +80,25 @@ public enum MarkdownRenderer {
                 at: index
             )
         }
+    }
+
+    private static func listContainerIdentity(
+        in intent: PresentationIntent?
+    ) -> Int? {
+        guard let intent else {
+            return nil
+        }
+
+        for component in intent.components.reversed() {
+            switch component.kind {
+            case .orderedList, .unorderedList:
+                return component.identity
+            default:
+                continue
+            }
+        }
+
+        return nil
     }
 
     private static func trailingNewlineCount(

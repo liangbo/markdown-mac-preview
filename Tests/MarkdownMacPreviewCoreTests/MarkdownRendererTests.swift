@@ -104,6 +104,28 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertNil(result.warning)
     }
 
+    func testCompactListDoesNotGainParagraphSeparatorsBetweenItems() {
+        let result = MarkdownRenderer.render("- one\n- two")
+        let rendered = String(result.attributed.characters)
+
+        XCTAssertTrue(rendered.contains("one"))
+        XCTAssertTrue(rendered.contains("two"))
+        XCTAssertFalse(rendered.contains("\n\n"))
+        XCTAssertNil(result.warning)
+    }
+
+    func testSeparatorsSurroundListWithoutSplittingListItems() {
+        let markdown = "# Title\n\n- one\n- two\n\nAfter paragraph"
+
+        let result = MarkdownRenderer.render(markdown)
+
+        XCTAssertEqual(
+            String(result.attributed.characters),
+            "Title\n\nonetwo\n\nAfter paragraph"
+        )
+        XCTAssertNil(result.warning)
+    }
+
     private enum TestError: Error {
         case parserFailed
     }

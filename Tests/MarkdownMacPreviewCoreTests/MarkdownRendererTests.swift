@@ -122,6 +122,27 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertNil(result.warning)
     }
 
+    func testListLikeLinesInsideFenceDoNotAffectFollowingCompactList() {
+        let markdown = """
+        ```text
+        - fake one
+
+        - fake two
+        ```
+
+        - real one
+        - real two
+        """
+
+        let result = MarkdownRenderer.render(markdown)
+        let rendered = String(result.attributed.characters)
+
+        XCTAssertTrue(rendered.contains("- fake one"))
+        XCTAssertTrue(rendered.contains("- fake two"))
+        XCTAssertFalse(rendered.contains("real one\n\nreal two"))
+        XCTAssertNil(result.warning)
+    }
+
     func testSeparatorsSurroundListWithoutSplittingListItems() {
         let markdown = "# Title\n\n- one\n- two\n\nAfter paragraph"
 

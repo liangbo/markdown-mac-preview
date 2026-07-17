@@ -45,7 +45,8 @@ public enum MarkdownRenderer {
         var previousBlockIdentity: Int?
         var previousListContainerIdentity: Int?
         var previousListItemIdentity: Int?
-        var looseListTransitions = looseListItemTransitionCount(in: markdown)
+        let listTransitions = listItemTransitions(in: markdown)
+        var nextListTransition = 0
 
         for run in attributed.runs {
             let intent = run.presentationIntent
@@ -57,7 +58,11 @@ public enum MarkdownRenderer {
             let isLooseListTransition = sharesListContainer &&
                 previousListItemIdentity != nil &&
                 previousListItemIdentity != currentListItemIdentity &&
-                looseListTransitions > 0
+                nextListTransition < listTransitions.count &&
+                listTransitions[nextListTransition]
+            let isListItemTransition = sharesListContainer &&
+                previousListItemIdentity != nil &&
+                previousListItemIdentity != currentListItemIdentity
             let isBlockTransition = previousBlockIdentity != blockIdentity
 
             if previousBlockIdentity != nil,
@@ -72,8 +77,8 @@ public enum MarkdownRenderer {
                 }
             }
 
-            if isLooseListTransition {
-                looseListTransitions -= 1
+            if isListItemTransition {
+                nextListTransition += 1
             }
 
             previousBlockIdentity = blockIdentity
@@ -131,20 +136,50 @@ public enum MarkdownRenderer {
         return nil
     }
 
-    private static func looseListItemTransitionCount(in markdown: String) -> Int {
-        var transitions = 0
+    private static func listItemTransitions(in markdown: String) -> [Bool] {
+        var transitions: [Bool] = []
         var lastNonBlankLineWasListItem = false
         var blankLineAfterListItem = false
+        var fence: FenceMarker?
 
-        for line in markdown.components(separatedBy: .newlines) {
-            let isBlank = line.trimmingCharacters(in: .whitespaces).isEmpty
+        for rawLine in markdown.components(separatedBy: "\n") {
+            let line = rawLine.hasSuffix("\r") ? String(rawLine.dropLast()) : rawLine
+            let leadingSpaces = line.prefix { $0 == " " }.count
+            let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+
+            if let activeFence = fence {
+                if let closingFence = fenceMarker(in: trimmedLine),
+                   closingFence.character == activeFence.character,
+                   closingFence.length >= activeFence.length,
+                   closingFence.suffix.trimmingCharacters(in: .whitespaces).isEmpty {
+                    fence = nil
+                }
+                continue
+            }
+
+            if leadingSpaces <= 3, let openingFence = fenceMarker(in: trimmedLine) {
+                fence = openingFence
+                lastNonBlankLineWasListItem = false
+                blankLineAfterListItem = false
+                continue
+            }
+
+            if leadingSpaces >= 4 {
+                lastNonBlankLineWasListItem = false
+                blankLineAfterListItem = false
+                continue
+            }
+
+            let isBlank = trimmedLine.isEmpty
             let isListItem = line.range(
                 of: #"^[ ]{0,3}(?:[*+-]|\d+[.)])[ \t]+"#,
                 options: .regularExpression
             ) != nil
 
             if isListItem && lastNonBlankLineWasListItem && blankLineAfterListItem {
-                transitions += 1
+                transitions.append(true)
+            } else if isListItem && lastNonBlankLineWasListItem {
+                transitions.append(false)
             }
 
             if isBlank {
@@ -156,6 +191,31 @@ public enum MarkdownRenderer {
         }
 
         return transitions
+    }
+
+    private struct FenceMarker {
+        let character: Character
+        let length: Int
+        let suffix: String
+    }
+
+    private static func fenceMarker(in line: String) -> FenceMarker? {
+        guard let character = line.first, character == "`" || character == "~" else {
+            return nil
+        }
+
+        var end = line.startIndex
+        var length = 0
+        while end < line.endIndex, line[end] == character {
+            length += 1
+            end = line.index(after: end)
+        }
+
+        guard length >= 3 else {
+            return nil
+        }
+
+        return FenceMarker(character: character, length: length, suffix: String(line[end...]))
     }
 
     private static func trailingNewlineCount(

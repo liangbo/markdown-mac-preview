@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_NAME="Markdown Mac Preview"
+APP_NAME="mdPreview"
 BUNDLE_DIR="$ROOT_DIR/build/$APP_NAME.app"
 CONTENTS_DIR="$BUNDLE_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
@@ -24,9 +24,9 @@ cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
   <key>CFBundleIdentifier</key>
   <string>com.liangbo.markdown-mac-preview</string>
   <key>CFBundleName</key>
-  <string>Markdown Mac Preview</string>
+  <string>mdPreview</string>
   <key>CFBundleDisplayName</key>
-  <string>Markdown Mac Preview</string>
+  <string>mdPreview</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>

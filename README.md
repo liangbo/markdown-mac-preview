@@ -1,8 +1,8 @@
-# Markdown Mac Preview
+# mdPreview
 
 A native macOS Markdown preview app focused on local `.md` and `.markdown` files.
 
-The app opens a local Markdown file, renders a readable preview by default, and lets you toggle a plain-text editor when you need to make small changes.
+The app opens local Markdown files, keeps recently opened files in a left sidebar, renders a readable preview by default, and lets you toggle a plain-text editor with live preview when you need to make small changes.
 
 ## Requirements
 
@@ -25,7 +25,7 @@ swift test
 
 ```bash
 scripts/build-app.sh
-open "build/Markdown Mac Preview.app"
+open "build/mdPreview.app"
 ```
 
 The generated app bundle is local and unsigned. macOS may ask for confirmation the first time it opens.

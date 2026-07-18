@@ -86,7 +86,7 @@ struct ContentView: View {
 
     private var emptyState: some View {
         VStack(spacing: 14) {
-            Text("Markdown Mac Preview")
+            Text("mdPreview")
                 .font(.title)
             Text("Open a local Markdown file to preview it.")
                 .foregroundStyle(.secondary)

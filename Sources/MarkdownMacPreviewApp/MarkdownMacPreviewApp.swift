@@ -31,7 +31,7 @@ final class MarkdownMacPreviewApplication: NSObject, NSApplicationDelegate, NSWi
             backing: .buffered,
             defer: false
         )
-        window.title = "Markdown Mac Preview"
+        window.title = "mdPreview"
         window.contentView = NSHostingView(rootView: contentView)
         window.delegate = self
         window.center()
@@ -66,7 +66,7 @@ final class MarkdownMacPreviewApplication: NSObject, NSApplicationDelegate, NSWi
         let appMenuItem = NSMenuItem()
         let appMenu = NSMenu()
         appMenu.addItem(
-            withTitle: "Quit Markdown Mac Preview",
+            withTitle: "Quit mdPreview",
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         )

@@ -334,8 +334,9 @@ final class AppViewModelTests: XCTestCase {
 
         viewModel.updateContent("# New\n\nLive preview text")
 
-        XCTAssertTrue(viewModel.previewContent.attributedString.characters.contains("New"))
-        XCTAssertTrue(viewModel.previewContent.attributedString.characters.contains("Live preview text"))
+        let renderedText = String(viewModel.previewContent.attributedString.characters)
+        XCTAssertTrue(renderedText.contains("New"))
+        XCTAssertTrue(renderedText.contains("Live preview text"))
         XCTAssertTrue(viewModel.document?.isDirty == true)
     }
 
@@ -513,7 +514,7 @@ struct RecentFilesSidebarView: View {
     }
 
     private func rowBackground(for file: RecentFile) -> Color {
-        guard selectedURL?.standardizedFileURL == file.url.standardizedFileURL else {
+        guard selectedURL?.standardizedFileURL.path == file.url.standardizedFileURL.path else {
             return Color.clear
         }
         return Color(nsColor: .selectedContentBackgroundColor).opacity(0.25)

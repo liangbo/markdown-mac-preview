@@ -4,37 +4,44 @@ import MarkdownMacPreviewCore
 import SwiftUI
 import UniformTypeIdentifiers
 
+private final class PreviewRenderQueue {
+    private let queue = DispatchQueue(label: "app.mdpreview.preview-renderer", qos: .userInitiated)
+
+    func render(_ markdown: String) async -> MarkdownPreviewContent {
+        await withCheckedContinuation { continuation in
+            queue.async {
+                continuation.resume(returning: MarkdownRenderer.render(markdown))
+            }
+        }
+    }
+}
+
+private let defaultPreviewRenderQueue = PreviewRenderQueue()
+
 @MainActor
 final class AppViewModel: ObservableObject {
     @Published private(set) var document: MarkdownDocument?
     @Published private(set) var recentFiles: [RecentFile]
+    @Published private(set) var previewContent: MarkdownPreviewContent
+    @Published private(set) var isPreviewRendering = false
     @Published var isEditorVisible = false
     @Published var errorMessage: String?
 
     private let recentFilesStore: RecentFilesStore
-    private let previewRenderer: (String) -> MarkdownPreviewContent
-    private var cachedPreviewContent: MarkdownPreviewContent?
-    private var cachedPreviewSource: String?
+    private let previewRenderer: (String) async -> MarkdownPreviewContent
+    private var renderTask: Task<Void, Never>?
+    private var renderGeneration = 0
 
     init(
         recentFilesStore: RecentFilesStore = RecentFilesStore(),
-        previewRenderer: @escaping (String) -> MarkdownPreviewContent = MarkdownRenderer.render
+        previewRenderer: @escaping (String) async -> MarkdownPreviewContent = { markdown in
+            await defaultPreviewRenderQueue.render(markdown)
+        }
     ) {
         self.recentFilesStore = recentFilesStore
         self.previewRenderer = previewRenderer
         recentFiles = recentFilesStore.load()
-    }
-
-    var previewContent: MarkdownPreviewContent {
-        let source = document?.content ?? ""
-        if cachedPreviewSource == source, let cachedPreviewContent {
-            return cachedPreviewContent
-        }
-
-        let renderedContent = previewRenderer(source)
-        cachedPreviewSource = source
-        cachedPreviewContent = renderedContent
-        return renderedContent
+        previewContent = Self.placeholderPreviewContent(message: "Open a Markdown file to preview it.")
     }
 
     var hasDocument: Bool {
@@ -69,10 +76,14 @@ final class AppViewModel: ObservableObject {
     private func loadDocument(from url: URL, promoteExistingRecentFile: Bool) {
         do {
             document = try MarkdownDocument.load(from: url)
-            invalidatePreviewCache()
             recentFiles = recentFilesStore.record(url, promoteExisting: promoteExistingRecentFile)
             isEditorVisible = false
             errorMessage = nil
+            schedulePreviewRender(
+                for: document?.content ?? "",
+                debounceNanoseconds: 0,
+                showPlaceholder: true
+            )
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -102,7 +113,11 @@ final class AppViewModel: ObservableObject {
 
     func updateContent(_ content: String) {
         document?.updateContent(content)
-        invalidatePreviewCache()
+        schedulePreviewRender(
+            for: content,
+            debounceNanoseconds: 150_000_000,
+            showPlaceholder: false
+        )
     }
 
     func saveDocument() {
@@ -113,7 +128,6 @@ final class AppViewModel: ObservableObject {
         do {
             try currentDocument.save()
             document = currentDocument
-            invalidatePreviewCache()
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -152,8 +166,65 @@ final class AppViewModel: ObservableObject {
         isEditorVisible.toggle()
     }
 
-    private func invalidatePreviewCache() {
-        cachedPreviewSource = nil
-        cachedPreviewContent = nil
+    private func schedulePreviewRender(
+        for source: String,
+        debounceNanoseconds: UInt64,
+        showPlaceholder: Bool
+    ) {
+        renderGeneration += 1
+        let generation = renderGeneration
+        renderTask?.cancel()
+        isPreviewRendering = true
+        if showPlaceholder {
+            previewContent = Self.placeholderPreviewContent(message: "Rendering preview...")
+        }
+
+        renderTask = Task { [previewRenderer] in
+            if debounceNanoseconds > 0 {
+                try? await Task.sleep(nanoseconds: debounceNanoseconds)
+            }
+            guard !Task.isCancelled else {
+                return
+            }
+
+            let renderedContent = await previewRenderer(source)
+            guard !Task.isCancelled else {
+                return
+            }
+
+            await MainActor.run {
+                guard generation == self.renderGeneration else {
+                    return
+                }
+                self.previewContent = renderedContent
+                self.isPreviewRendering = false
+            }
+        }
+    }
+
+    private static func placeholderPreviewContent(message: String) -> MarkdownPreviewContent {
+        MarkdownPreviewContent(
+            html: """
+            <!doctype html>
+            <html>
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <style>
+                body {
+                  margin: 0;
+                  min-height: 100vh;
+                  display: grid;
+                  place-items: center;
+                  color: color-mix(in srgb, CanvasText 58%, transparent);
+                  background: Canvas;
+                  font: 14px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+                }
+              </style>
+            </head>
+            <body>\(message)</body>
+            </html>
+            """
+        )
     }
 }

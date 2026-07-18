@@ -8,7 +8,7 @@ final class MarkdownMacPreviewApplication: NSObject, NSApplicationDelegate, NSWi
     private static var sharedDelegate: MarkdownMacPreviewApplication?
     private let viewModel = AppViewModel()
     private var window: NSWindow?
-    private var toolbarItems: [NSToolbarItem.Identifier: NSToolbarItem] = [:]
+    private var titlebarButtons: [TitlebarAction: NSButton] = [:]
     private var viewModelCancellable: AnyCancellable?
     private var mayTerminateWithoutConfirmation = false
 
@@ -37,9 +37,9 @@ final class MarkdownMacPreviewApplication: NSObject, NSApplicationDelegate, NSWi
         window.title = "mdPreview"
         window.contentView = NSHostingView(rootView: contentView)
         window.delegate = self
-        window.toolbar = buildWindowToolbar()
-        window.toolbarStyle = .unifiedCompact
+        window.titlebarAppearsTransparent = false
         window.titleVisibility = .visible
+        window.addTitlebarAccessoryViewController(buildTitlebarActions())
         window.center()
         window.makeKeyAndOrderFront(nil)
         self.window = window
@@ -111,102 +111,75 @@ final class MarkdownMacPreviewApplication: NSObject, NSApplicationDelegate, NSWi
         return mainMenu
     }
 
-    @objc private func openDocument(_ sender: Any?) {
+    @objc func openDocument(_ sender: Any?) {
         viewModel.openDocument()
         updateToolbarItems()
     }
 
-    @objc private func saveDocument(_ sender: Any?) {
+    @objc func saveDocument(_ sender: Any?) {
         viewModel.saveDocument()
         updateToolbarItems()
     }
 
-    @objc private func toggleEditor(_ sender: Any?) {
+    @objc func toggleEditor(_ sender: Any?) {
         viewModel.toggleEditor()
         updateToolbarItems()
     }
 
-    private func buildWindowToolbar() -> NSToolbar {
-        let toolbar = NSToolbar(identifier: "mdPreview.toolbar")
-        toolbar.delegate = self
-        toolbar.displayMode = .iconAndLabel
-        toolbar.allowsUserCustomization = false
-        toolbar.autosavesConfiguration = false
-        return toolbar
-    }
-
-    private func makeToolbarItem(
-        identifier: NSToolbarItem.Identifier,
-        label: String,
-        systemSymbolName: String,
-        action: Selector
-    ) -> NSToolbarItem {
-        let item = NSToolbarItem(itemIdentifier: identifier)
-        item.label = label
-        item.paletteLabel = label
-        item.toolTip = label
-        item.target = self
-        item.action = action
-        if #available(macOS 11.0, *) {
-            item.image = NSImage(systemSymbolName: systemSymbolName, accessibilityDescription: label)
-        }
-        toolbarItems[identifier] = item
-        return item
-    }
-
     private func updateToolbarItems() {
-        toolbarItems[.saveDocument]?.isEnabled = viewModel.canSave
-        toolbarItems[.toggleEditor]?.isEnabled = viewModel.hasDocument
-        toolbarItems[.toggleEditor]?.label = viewModel.isEditorVisible ? "Hide Editor" : "Edit"
-        toolbarItems[.toggleEditor]?.paletteLabel = toolbarItems[.toggleEditor]?.label ?? "Edit"
-        toolbarItems[.toggleEditor]?.toolTip = toolbarItems[.toggleEditor]?.label
+        titlebarButtons[.save]?.isEnabled = viewModel.canSave
+        titlebarButtons[.edit]?.isEnabled = viewModel.hasDocument
+        titlebarButtons[.edit]?.title = viewModel.isEditorVisible ? "Hide Editor" : "Edit"
+    }
+
+    private func buildTitlebarActions() -> NSTitlebarAccessoryViewController {
+        let stackView = NSStackView()
+        stackView.orientation = .horizontal
+        stackView.spacing = 6
+        stackView.edgeInsets = NSEdgeInsets(top: 0, left: 8, bottom: 0, right: 0)
+
+        for action in TitlebarAction.allCases {
+            let button = NSButton(title: action.title, target: self, action: action.selector)
+            button.bezelStyle = .texturedRounded
+            button.controlSize = .small
+            button.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+            button.setContentHuggingPriority(.required, for: .horizontal)
+            button.toolTip = action.title
+            titlebarButtons[action] = button
+            stackView.addArrangedSubview(button)
+        }
+
+        let accessory = NSTitlebarAccessoryViewController()
+        accessory.layoutAttribute = .left
+        accessory.view = stackView
+        return accessory
     }
 }
 
-extension MarkdownMacPreviewApplication: NSToolbarDelegate {
-    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.openDocument, .saveDocument, .toggleEditor, .flexibleSpace]
-    }
+private enum TitlebarAction: CaseIterable {
+    case open
+    case save
+    case edit
 
-    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.openDocument, .saveDocument, .toggleEditor, .flexibleSpace]
-    }
-
-    func toolbar(
-        _ toolbar: NSToolbar,
-        itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
-        willBeInsertedIntoToolbar flag: Bool
-    ) -> NSToolbarItem? {
-        switch itemIdentifier {
-        case .openDocument:
-            makeToolbarItem(
-                identifier: itemIdentifier,
-                label: "Open",
-                systemSymbolName: "folder",
-                action: #selector(openDocument(_:))
-            )
-        case .saveDocument:
-            makeToolbarItem(
-                identifier: itemIdentifier,
-                label: "Save",
-                systemSymbolName: "square.and.arrow.down",
-                action: #selector(saveDocument(_:))
-            )
-        case .toggleEditor:
-            makeToolbarItem(
-                identifier: itemIdentifier,
-                label: "Edit",
-                systemSymbolName: "square.and.pencil",
-                action: #selector(toggleEditor(_:))
-            )
-        default:
-            nil
+    var title: String {
+        switch self {
+        case .open:
+            "Open"
+        case .save:
+            "Save"
+        case .edit:
+            "Edit"
         }
     }
-}
 
-private extension NSToolbarItem.Identifier {
-    static let openDocument = NSToolbarItem.Identifier("mdPreview.open")
-    static let saveDocument = NSToolbarItem.Identifier("mdPreview.save")
-    static let toggleEditor = NSToolbarItem.Identifier("mdPreview.edit")
+    var selector: Selector {
+        switch self {
+        case .open:
+            #selector(MarkdownMacPreviewApplication.openDocument(_:))
+        case .save:
+            #selector(MarkdownMacPreviewApplication.saveDocument(_:))
+        case .edit:
+            #selector(MarkdownMacPreviewApplication.toggleEditor(_:))
+        }
+    }
 }

@@ -51,11 +51,27 @@ struct ContentView: View {
                 HSplitView {
                     EditorView(content: editableContent)
                         .frame(minWidth: 320)
-                    PreviewView(content: viewModel.previewContent, baseURL: previewBaseURL)
+                    previewPane
                         .frame(minWidth: 420)
                 }
             } else {
-                PreviewView(content: viewModel.previewContent, baseURL: previewBaseURL)
+                previewPane
+            }
+        }
+    }
+
+    private var previewPane: some View {
+        ZStack(alignment: .topTrailing) {
+            PreviewView(content: viewModel.previewContent, baseURL: previewBaseURL)
+
+            if viewModel.isPreviewRendering {
+                Text("Rendering...")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                    .padding(12)
             }
         }
     }

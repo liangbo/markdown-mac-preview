@@ -17,10 +17,21 @@ struct ContentView: View {
 
             Divider()
 
-            if viewModel.hasDocument {
-                documentBody
-            } else {
-                emptyState
+            HStack(spacing: 0) {
+                RecentFilesSidebarView(
+                    recentFiles: viewModel.recentFiles,
+                    selectedURL: viewModel.document?.fileURL,
+                    open: viewModel.openRecentFile,
+                    remove: viewModel.removeRecentFile
+                )
+
+                Divider()
+
+                if viewModel.hasDocument {
+                    documentBody
+                } else {
+                    emptyState
+                }
             }
 
             Divider()

@@ -3,17 +3,33 @@ import SwiftUI
 struct RecentFilesSidebarView: View {
     let recentFiles: [RecentFile]
     let selectedURL: URL?
+    let actionState: SidebarActionState
+    let openDocument: () -> Void
+    let toggleEditor: () -> Void
+    let saveDocument: () -> Void
     let open: (RecentFile) -> Void
     let remove: (RecentFile) -> Void
     let move: (IndexSet, Int) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Recent")
-                .font(.headline)
-                .padding(.horizontal, 12)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
+            HStack(spacing: 6) {
+                Text("Recent")
+                    .font(.headline)
+
+                Spacer(minLength: 4)
+
+                Button("Open", action: openDocument)
+                Button(actionState.editTitle, action: toggleEditor)
+                    .disabled(!actionState.canEdit)
+                Button("Save", action: saveDocument)
+                    .disabled(!actionState.canSave)
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .padding(.horizontal, 12)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
 
             if recentFiles.isEmpty {
                 Text("No recent files")

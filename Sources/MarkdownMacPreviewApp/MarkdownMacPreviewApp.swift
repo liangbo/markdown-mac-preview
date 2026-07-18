@@ -1,5 +1,4 @@
 import AppKit
-import Combine
 import SwiftUI
 
 @main
@@ -8,8 +7,6 @@ final class MarkdownMacPreviewApplication: NSObject, NSApplicationDelegate, NSWi
     private static var sharedDelegate: MarkdownMacPreviewApplication?
     private let viewModel = AppViewModel()
     private var window: NSWindow?
-    private var titlebarButtons: [TitlebarAction: NSButton] = [:]
-    private var viewModelCancellable: AnyCancellable?
     private var mayTerminateWithoutConfirmation = false
 
     static func main() {
@@ -39,16 +36,9 @@ final class MarkdownMacPreviewApplication: NSObject, NSApplicationDelegate, NSWi
         window.delegate = self
         window.titlebarAppearsTransparent = false
         window.titleVisibility = .visible
-        window.addTitlebarAccessoryViewController(buildTitlebarActions())
         window.center()
         window.makeKeyAndOrderFront(nil)
         self.window = window
-        viewModelCancellable = viewModel.objectWillChange.sink { [weak self] _ in
-            DispatchQueue.main.async {
-                self?.updateToolbarItems()
-            }
-        }
-        updateToolbarItems()
 
         NSApplication.shared.activate(ignoringOtherApps: true)
     }
@@ -113,73 +103,13 @@ final class MarkdownMacPreviewApplication: NSObject, NSApplicationDelegate, NSWi
 
     @objc func openDocument(_ sender: Any?) {
         viewModel.openDocument()
-        updateToolbarItems()
     }
 
     @objc func saveDocument(_ sender: Any?) {
         viewModel.saveDocument()
-        updateToolbarItems()
     }
 
     @objc func toggleEditor(_ sender: Any?) {
         viewModel.toggleEditor()
-        updateToolbarItems()
-    }
-
-    private func updateToolbarItems() {
-        titlebarButtons[.save]?.isEnabled = viewModel.canSave
-        titlebarButtons[.edit]?.isEnabled = viewModel.hasDocument
-        titlebarButtons[.edit]?.title = viewModel.isEditorVisible ? "Hide Editor" : "Edit"
-    }
-
-    private func buildTitlebarActions() -> NSTitlebarAccessoryViewController {
-        let stackView = NSStackView()
-        stackView.orientation = .horizontal
-        stackView.spacing = 6
-        stackView.edgeInsets = NSEdgeInsets(top: 0, left: 8, bottom: 0, right: 0)
-
-        for action in TitlebarAction.allCases {
-            let button = NSButton(title: action.title, target: self, action: action.selector)
-            button.bezelStyle = .texturedRounded
-            button.controlSize = .small
-            button.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-            button.setContentHuggingPriority(.required, for: .horizontal)
-            button.toolTip = action.title
-            titlebarButtons[action] = button
-            stackView.addArrangedSubview(button)
-        }
-
-        let accessory = NSTitlebarAccessoryViewController()
-        accessory.layoutAttribute = .left
-        accessory.view = stackView
-        return accessory
-    }
-}
-
-private enum TitlebarAction: CaseIterable {
-    case open
-    case save
-    case edit
-
-    var title: String {
-        switch self {
-        case .open:
-            "Open"
-        case .save:
-            "Save"
-        case .edit:
-            "Edit"
-        }
-    }
-
-    var selector: Selector {
-        switch self {
-        case .open:
-            #selector(MarkdownMacPreviewApplication.openDocument(_:))
-        case .save:
-            #selector(MarkdownMacPreviewApplication.saveDocument(_:))
-        case .edit:
-            #selector(MarkdownMacPreviewApplication.toggleEditor(_:))
-        }
     }
 }

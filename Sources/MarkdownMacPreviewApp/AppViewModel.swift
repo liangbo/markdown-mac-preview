@@ -18,6 +18,12 @@ private final class PreviewRenderQueue {
 
 private let defaultPreviewRenderQueue = PreviewRenderQueue()
 
+struct SidebarActionState: Equatable {
+    let canEdit: Bool
+    let canSave: Bool
+    let editTitle: String
+}
+
 @MainActor
 final class AppViewModel: ObservableObject {
     @Published private(set) var document: MarkdownDocument?
@@ -50,6 +56,14 @@ final class AppViewModel: ObservableObject {
 
     var canSave: Bool {
         document?.isDirty == true
+    }
+
+    var sidebarActionState: SidebarActionState {
+        SidebarActionState(
+            canEdit: hasDocument,
+            canSave: canSave,
+            editTitle: isEditorVisible ? "Hide Editor" : "Edit"
+        )
     }
 
     func openDocument() {

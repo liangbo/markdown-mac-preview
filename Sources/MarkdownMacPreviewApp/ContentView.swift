@@ -21,6 +21,10 @@ struct ContentView: View {
                 RecentFilesSidebarView(
                     recentFiles: viewModel.recentFiles,
                     selectedURL: viewModel.document?.fileURL,
+                    actionState: viewModel.sidebarActionState,
+                    openDocument: viewModel.openDocument,
+                    toggleEditor: viewModel.toggleEditor,
+                    saveDocument: viewModel.saveDocument,
                     open: viewModel.openRecentFile,
                     remove: viewModel.removeRecentFile,
                     move: viewModel.moveRecentFiles

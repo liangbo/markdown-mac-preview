@@ -60,6 +60,35 @@ final class AppViewModelTests: XCTestCase {
         XCTAssertEqual(store.load().map(\.url), [first.standardizedFileURL, third.standardizedFileURL, second.standardizedFileURL])
     }
 
+    func testSidebarActionsAreDisabledBeforeOpeningDocument() {
+        let viewModel = AppViewModel(recentFilesStore: store)
+
+        let state = viewModel.sidebarActionState
+
+        XCTAssertFalse(state.canEdit)
+        XCTAssertFalse(state.canSave)
+        XCTAssertEqual(state.editTitle, "Edit")
+    }
+
+    func testSidebarActionsReflectDocumentAndDirtyState() throws {
+        let url = try makeMarkdownFile(named: "actions.md", content: "# Actions")
+        let viewModel = AppViewModel(recentFilesStore: store)
+
+        viewModel.loadDocument(from: url)
+
+        XCTAssertTrue(viewModel.sidebarActionState.canEdit)
+        XCTAssertFalse(viewModel.sidebarActionState.canSave)
+        XCTAssertEqual(viewModel.sidebarActionState.editTitle, "Edit")
+
+        viewModel.toggleEditor()
+
+        XCTAssertEqual(viewModel.sidebarActionState.editTitle, "Hide Editor")
+
+        viewModel.updateContent("# Changed")
+
+        XCTAssertTrue(viewModel.sidebarActionState.canSave)
+    }
+
     func testLoadDocumentSwitchesImmediatelyBeforePreviewRenderCompletes() async throws {
         let url = try makeMarkdownFile(named: "slow.md", content: "# Slow")
         var continuation: CheckedContinuation<MarkdownPreviewContent, Never>?

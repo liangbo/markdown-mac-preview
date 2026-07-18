@@ -1,3 +1,30 @@
-.build/
-build/
+# macOS
 .DS_Store
+
+# Swift Package Manager
+.build/
+
+# Local app bundles
+build/
+
+# Xcode user settings
+xcuserdata/
+*.hmap
+
+# App packaging
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Playgrounds
+timeline.xctimeline
+playground.xcworkspace
+
+# Carthage
+Carthage/Build/
+
+# fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output

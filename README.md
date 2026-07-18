@@ -2,7 +2,7 @@
 
 A native macOS Markdown preview app focused on local `.md` and `.markdown` files.
 
-The app opens local Markdown files, keeps recently opened files in a left sidebar, renders a readable preview by default, and lets you toggle a plain-text editor with live preview when you need to make small changes.
+The app opens local Markdown files, keeps recently opened files in a left sidebar, renders Markdown as HTML in an embedded macOS WebView by default, and lets you toggle a plain-text editor with live preview when you need to make small changes.
 
 ## Requirements
 

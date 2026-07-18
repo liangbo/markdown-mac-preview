@@ -39,9 +39,9 @@ final class AppViewModelTests: XCTestCase {
 
         viewModel.updateContent("# New\n\nLive preview text")
 
-        let renderedText = String(viewModel.previewContent.attributed.characters)
-        XCTAssertTrue(renderedText.contains("New"))
-        XCTAssertTrue(renderedText.contains("Live preview text"))
+        let renderedHTML = viewModel.previewContent.html
+        XCTAssertTrue(renderedHTML.contains("New"))
+        XCTAssertTrue(renderedHTML.contains("Live preview text"))
         XCTAssertTrue(viewModel.document?.isDirty == true)
     }
 
@@ -52,7 +52,7 @@ final class AppViewModelTests: XCTestCase {
             recentFilesStore: store,
             previewRenderer: { markdown in
                 renderCount += 1
-                return MarkdownPreviewContent(attributed: AttributedString(markdown))
+                return MarkdownPreviewContent(html: markdown)
             }
         )
         viewModel.loadDocument(from: url)

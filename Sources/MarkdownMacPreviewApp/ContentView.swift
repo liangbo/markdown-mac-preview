@@ -11,6 +11,10 @@ struct ContentView: View {
         )
     }
 
+    private var previewBaseURL: URL? {
+        viewModel.document?.fileURL.deletingLastPathComponent()
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             toolbar
@@ -75,11 +79,11 @@ struct ContentView: View {
                 HSplitView {
                     EditorView(content: editableContent)
                         .frame(minWidth: 320)
-                    PreviewView(content: viewModel.previewContent)
+                    PreviewView(content: viewModel.previewContent, baseURL: previewBaseURL)
                         .frame(minWidth: 420)
                 }
             } else {
-                PreviewView(content: viewModel.previewContent)
+                PreviewView(content: viewModel.previewContent, baseURL: previewBaseURL)
             }
         }
     }

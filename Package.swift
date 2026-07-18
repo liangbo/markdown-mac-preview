@@ -16,9 +16,15 @@ let package = Package(
             targets: ["MarkdownMacPreviewApp"]
         )
     ],
+    dependencies: [
+        .package(url: "https://github.com/JohnSundell/Ink.git", from: "0.6.0")
+    ],
     targets: [
         .target(
-            name: "MarkdownMacPreviewCore"
+            name: "MarkdownMacPreviewCore",
+            dependencies: [
+                .product(name: "Ink", package: "Ink")
+            ]
         ),
         .executableTarget(
             name: "MarkdownMacPreviewApp",

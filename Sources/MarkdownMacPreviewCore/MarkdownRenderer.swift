@@ -1,407 +1,129 @@
 import Foundation
+import Ink
 
 public struct MarkdownPreviewContent: Equatable {
-    public let attributed: AttributedString
+    public let html: String
     public let warning: String?
 
-    public init(attributed: AttributedString, warning: String? = nil) {
-        self.attributed = attributed
+    public init(html: String, warning: String? = nil) {
+        self.html = html
         self.warning = warning
     }
 }
 
 public enum MarkdownRenderer {
     public static func render(_ markdown: String) -> MarkdownPreviewContent {
-        render(markdown, parser: { markdown in
-            try AttributedString(
-                markdown: markdown,
-                options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
-            )
+        render(markdown, htmlRenderer: { markdown in
+            MarkdownParser().html(from: markdown)
         })
     }
 
     static func render(
         _ markdown: String,
-        parser: (String) throws -> AttributedString
+        htmlRenderer: (String) throws -> String
     ) -> MarkdownPreviewContent {
-        let renderableMarkdown = replacingRawHTML(in: markdown)
-
         do {
-            var attributed = try parser(renderableMarkdown)
-            insertMissingBlockSeparators(into: &attributed, markdown: renderableMarkdown)
-            return MarkdownPreviewContent(attributed: attributed)
+            return MarkdownPreviewContent(
+                html: htmlDocument(body: try htmlRenderer(markdown))
+            )
         } catch {
             return MarkdownPreviewContent(
-                attributed: AttributedString(markdown),
+                html: fallbackDocument(for: markdown),
                 warning: "Markdown preview fell back to plain text."
             )
         }
     }
 
-    private static func replacingRawHTML(in markdown: String) -> String {
-        var lines: [String] = []
-        var fence: FenceMarker?
-
-        for rawLine in markdown.components(separatedBy: "\n") {
-            let line = rawLine.hasSuffix("\r") ? String(rawLine.dropLast()) : rawLine
-            let trimmedLine = line.trimmingCharacters(in: .whitespaces)
-
-            if let activeFence = fence {
-                lines.append(line)
-                if let closingFence = fenceMarker(in: trimmedLine),
-                   closingFence.character == activeFence.character,
-                   closingFence.length >= activeFence.length,
-                   closingFence.suffix.trimmingCharacters(in: .whitespaces).isEmpty {
-                    fence = nil
-                }
-                continue
+    private static func htmlDocument(body: String) -> String {
+        """
+        <!doctype html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            :root { color-scheme: light dark; }
+            body.mdpreview-document {
+              margin: 0;
+              padding: 0;
+              background: Canvas;
+              color: CanvasText;
+              font: 16px/1.68 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
             }
-
-            let leadingSpaces = line.prefix { $0 == " " }.count
-            if leadingSpaces <= 3, let openingFence = fenceMarker(in: trimmedLine) {
-                fence = openingFence
-                lines.append(line)
-                continue
+            article {
+              box-sizing: border-box;
+              max-width: 820px;
+              margin: 0 auto;
+              padding: 36px 42px 56px;
             }
-
-            lines.append(replacingInlineHTML(in: line))
-        }
-
-        return lines.joined(separator: "\n")
+            h1, h2, h3, h4, h5, h6 {
+              line-height: 1.25;
+              margin: 1.45em 0 0.6em;
+              font-weight: 650;
+            }
+            h1 { font-size: 2.0em; border-bottom: 1px solid color-mix(in srgb, CanvasText 18%, transparent); padding-bottom: 0.25em; }
+            h2 { font-size: 1.55em; border-bottom: 1px solid color-mix(in srgb, CanvasText 12%, transparent); padding-bottom: 0.2em; }
+            h3 { font-size: 1.25em; }
+            p { margin: 0.72em 0; }
+            a { color: LinkText; text-decoration-thickness: 0.08em; text-underline-offset: 0.16em; }
+            blockquote {
+              margin: 1em 0;
+              padding: 0.1em 1em;
+              color: color-mix(in srgb, CanvasText 72%, transparent);
+              border-left: 4px solid color-mix(in srgb, CanvasText 22%, transparent);
+              background: color-mix(in srgb, CanvasText 5%, transparent);
+            }
+            ul, ol { padding-left: 1.7em; margin: 0.65em 0; }
+            li + li { margin-top: 0.2em; }
+            code {
+              font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+              font-size: 0.92em;
+              background: color-mix(in srgb, CanvasText 8%, transparent);
+              border-radius: 4px;
+              padding: 0.12em 0.32em;
+            }
+            pre {
+              overflow: auto;
+              padding: 14px 16px;
+              border-radius: 7px;
+              background: color-mix(in srgb, CanvasText 7%, transparent);
+            }
+            pre code { background: transparent; padding: 0; border-radius: 0; }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin: 1em 0;
+              display: block;
+              overflow-x: auto;
+            }
+            th, td {
+              border: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
+              padding: 7px 10px;
+            }
+            th { background: color-mix(in srgb, CanvasText 6%, transparent); font-weight: 650; }
+            hr { border: 0; border-top: 1px solid color-mix(in srgb, CanvasText 16%, transparent); margin: 2em 0; }
+            img { max-width: 100%; height: auto; }
+          </style>
+        </head>
+        <body class="mdpreview-document">
+          <article>
+        \(body)
+          </article>
+        </body>
+        </html>
+        """
     }
 
-    private static func replacingInlineHTML(in line: String) -> String {
-        guard line.contains("<") else {
-            return decodingHTMLEntities(in: line)
-        }
-
-        var rendered = line
-        let replacements: [(String, String)] = [
-            (#"(?i)<\s*br\s*/?\s*>"#, "\n"),
-            (#"(?i)<\s*li(?:\s+[^>]*)?>"#, "- "),
-            (#"(?i)<\s*/\s*li\s*>"#, "\n"),
-            (#"(?i)<\s*(?:strong|b)(?:\s+[^>]*)?>"#, "**"),
-            (#"(?i)<\s*/\s*(?:strong|b)\s*>"#, "**"),
-            (#"(?i)<\s*(?:em|i)(?:\s+[^>]*)?>"#, "*"),
-            (#"(?i)<\s*/\s*(?:em|i)\s*>"#, "*"),
-            (#"(?i)<\s*code(?:\s+[^>]*)?>"#, "`"),
-            (#"(?i)<\s*/\s*code\s*>"#, "`"),
-            (#"(?i)<\s*/\s*t[dh]\s*>"#, " | "),
-            (#"(?i)<\s*t[dh](?:\s+[^>]*)?>"#, ""),
-            (#"(?i)<\s*/\s*tr\s*>"#, "\n"),
-            (#"(?i)<\s*tr(?:\s+[^>]*)?>"#, ""),
-            (#"(?i)<\s*/\s*(?:p|div|section|article|header|footer|blockquote|h[1-6]|table|thead|tbody|ul|ol)\s*>"#, "\n\n"),
-            (#"(?i)<\s*(?:p|div|section|article|header|footer|blockquote|h[1-6]|table|thead|tbody|ul|ol)(?:\s+[^>]*)?>"#, ""),
-            (#"(?i)<[^>]+>"#, "")
-        ]
-
-        for (pattern, replacement) in replacements {
-            rendered = rendered.replacingOccurrences(
-                of: pattern,
-                with: replacement,
-                options: .regularExpression
-            )
-        }
-
-        return decodingHTMLEntities(in: rendered)
+    private static func fallbackDocument(for markdown: String) -> String {
+        htmlDocument(body: "<pre>\(escapeHTML(markdown))</pre>")
     }
 
-    private static func decodingHTMLEntities(in text: String) -> String {
+    private static func escapeHTML(_ text: String) -> String {
         text
-            .replacingOccurrences(of: "&nbsp;", with: " ")
-            .replacingOccurrences(of: "&amp;", with: "&")
-            .replacingOccurrences(of: "&lt;", with: "<")
-            .replacingOccurrences(of: "&gt;", with: ">")
-            .replacingOccurrences(of: "&quot;", with: "\"")
-            .replacingOccurrences(of: "&#39;", with: "'")
-    }
-
-    private static func insertMissingBlockSeparators(
-        into attributed: inout AttributedString,
-        markdown: String
-    ) {
-        var insertions: [(offset: Int, count: Int)] = []
-        var offset = 0
-        var previousBlockIdentity: Int?
-        var previousListContainerIdentity: Int?
-        var previousListItemIdentity: Int?
-        let listTransitions = listItemTransitions(in: markdown)
-        var nextListTransition = 0
-        var previousIntent: PresentationIntent?
-        var lastListItemByContainer: [Int: Int] = [:]
-
-        for run in attributed.runs {
-            let intent = run.presentationIntent
-            let blockIdentity = intent?.components.first?.identity
-            let currentListContainerIdentity = listContainerIdentity(in: intent)
-            let currentListItemIdentity = listItemIdentity(in: intent)
-            let sharesListContainer = previousListContainerIdentity != nil &&
-                previousListContainerIdentity == currentListContainerIdentity
-            let isSiblingListItemTransition = if let currentListContainerIdentity,
-                                                  let currentListItemIdentity {
-                lastListItemByContainer[currentListContainerIdentity] != nil &&
-                    lastListItemByContainer[currentListContainerIdentity] != currentListItemIdentity
-            } else {
-                false
-            }
-            let isSameListItem = sharesListContainer &&
-                previousListItemIdentity != nil &&
-                previousListItemIdentity == currentListItemIdentity
-            let isReturningToListContainer = !sharesListContainer &&
-                previousListContainerIdentity != nil &&
-                currentListContainerIdentity != nil &&
-                containsListContainer(
-                    in: previousIntent,
-                    identity: currentListContainerIdentity!
-                )
-            let isLooseListTransition = isSiblingListItemTransition &&
-                nextListTransition < listTransitions.count &&
-                listTransitions[nextListTransition].isLoose
-            let isBlockTransition = previousBlockIdentity != blockIdentity
-            let isParentContinuationTransition = isReturningToListContainer &&
-                isBlockTransition &&
-                currentListContainerIdentity.flatMap {
-                    lastListItemByContainer[$0]
-                } == currentListItemIdentity
-            let isNestedListTransition = previousListContainerIdentity != nil &&
-                currentListContainerIdentity != nil &&
-                previousListContainerIdentity != currentListContainerIdentity &&
-                (containsListContainer(
-                    in: intent,
-                    identity: previousListContainerIdentity!
-                ) || containsListContainer(
-                    in: previousIntent,
-                    identity: currentListContainerIdentity!
-                ))
-            let shouldInsertSeparator = if isNestedListTransition && !isReturningToListContainer {
-                false
-            } else if sharesListContainer {
-                (isSameListItem && isBlockTransition) || isLooseListTransition
-            } else if isReturningToListContainer {
-                isLooseListTransition || isParentContinuationTransition
-            } else {
-                isBlockTransition
-            }
-
-            if previousBlockIdentity != nil,
-               blockIdentity != nil,
-               shouldInsertSeparator {
-                let trailingNewlines = trailingNewlineCount(
-                    in: attributed.characters,
-                    before: offset
-                )
-                if trailingNewlines < 2 {
-                    insertions.append((offset, 2 - trailingNewlines))
-                }
-            }
-
-            if isSiblingListItemTransition {
-                nextListTransition += 1
-            }
-
-            if let currentListContainerIdentity,
-               let currentListItemIdentity {
-                lastListItemByContainer[currentListContainerIdentity] = currentListItemIdentity
-            }
-
-            previousBlockIdentity = blockIdentity
-            previousListContainerIdentity = currentListContainerIdentity
-            previousListItemIdentity = currentListItemIdentity
-            previousIntent = intent
-            offset += attributed.characters[run.range].count
-        }
-
-        for insertion in insertions.reversed() {
-            guard insertion.offset <= attributed.characters.count else {
-                continue
-            }
-
-            let index = attributed.characters.index(
-                attributed.characters.startIndex,
-                offsetBy: insertion.offset
-            )
-            attributed.insert(
-                AttributedString(String(repeating: "\n", count: insertion.count)),
-                at: index
-            )
-        }
-    }
-
-    private static func listContainerIdentity(
-        in intent: PresentationIntent?
-    ) -> Int? {
-        guard let intent else {
-            return nil
-        }
-
-        for component in intent.components {
-            switch component.kind {
-            case .orderedList, .unorderedList:
-                return component.identity
-            default:
-                continue
-            }
-        }
-
-        return nil
-    }
-
-    private static func containsListContainer(
-        in intent: PresentationIntent?,
-        identity: Int
-    ) -> Bool {
-        intent?.components.contains { component in
-            switch component.kind {
-            case .orderedList, .unorderedList:
-                return component.identity == identity
-            default:
-                return false
-            }
-        } ?? false
-    }
-
-    private static func listItemIdentity(in intent: PresentationIntent?) -> Int? {
-        guard let intent else {
-            return nil
-        }
-
-        for component in intent.components {
-            if case .listItem = component.kind {
-                return component.identity
-            }
-        }
-
-        return nil
-    }
-
-    private struct ListTransition {
-        let isLoose: Bool
-    }
-
-    private struct ListContext {
-        var hasListItem = false
-        var markerKind: ListMarkerKind?
-    }
-
-    private enum ListMarkerKind: Equatable {
-        case ordered
-        case unordered
-    }
-
-    private static func listItemTransitions(in markdown: String) -> [ListTransition] {
-        var transitions: [ListTransition] = []
-        var contexts: [Int: ListContext] = [:]
-        var fence: FenceMarker?
-        var blankLinePending = false
-
-        for rawLine in markdown.components(separatedBy: "\n") {
-            let line = rawLine.hasSuffix("\r") ? String(rawLine.dropLast()) : rawLine
-            let leadingSpaces = line.prefix { $0 == " " }.count
-            let trimmedLine = line.trimmingCharacters(in: .whitespaces)
-
-            if let activeFence = fence {
-                if let closingFence = fenceMarker(in: trimmedLine),
-                   closingFence.character == activeFence.character,
-                   closingFence.length >= activeFence.length,
-                   closingFence.suffix.trimmingCharacters(in: .whitespaces).isEmpty {
-                    fence = nil
-                }
-                continue
-            }
-
-            if leadingSpaces <= 3, let openingFence = fenceMarker(in: trimmedLine) {
-                fence = openingFence
-                contexts.removeAll()
-                blankLinePending = false
-                continue
-            }
-
-            let listMarker = listMarker(in: line)
-            if leadingSpaces >= 4, listMarker == nil {
-                contexts = contexts.filter { $0.key < leadingSpaces }
-                blankLinePending = false
-                continue
-            }
-
-            let isBlank = trimmedLine.isEmpty
-
-            if isBlank {
-                blankLinePending = true
-            } else if let listMarker {
-                contexts = contexts.filter { $0.key <= listMarker.indentation }
-                var context = contexts[listMarker.indentation] ?? ListContext()
-                if context.hasListItem, context.markerKind == listMarker.kind {
-                    transitions.append(
-                        ListTransition(isLoose: blankLinePending)
-                    )
-                }
-                context.hasListItem = true
-                context.markerKind = listMarker.kind
-                contexts[listMarker.indentation] = context
-                blankLinePending = false
-            } else {
-                contexts = contexts.filter { $0.key < leadingSpaces }
-                blankLinePending = false
-            }
-        }
-
-        return transitions
-    }
-
-    private struct ListMarker {
-        let indentation: Int
-        let kind: ListMarkerKind
-    }
-
-    private static func listMarker(in line: String) -> ListMarker? {
-        let indentation = line.prefix { $0 == " " }.count
-        let marker = String(line.dropFirst(indentation))
-
-        if marker.range(of: #"^(?:[*+-])[ \t]+"#, options: .regularExpression) != nil {
-            return ListMarker(indentation: indentation, kind: .unordered)
-        }
-
-        if marker.range(of: #"^\d+[.)][ \t]+"#, options: .regularExpression) != nil {
-            return ListMarker(indentation: indentation, kind: .ordered)
-        }
-
-        return nil
-    }
-
-    private struct FenceMarker {
-        let character: Character
-        let length: Int
-        let suffix: String
-    }
-
-    private static func fenceMarker(in line: String) -> FenceMarker? {
-        guard let character = line.first, character == "`" || character == "~" else {
-            return nil
-        }
-
-        var end = line.startIndex
-        var length = 0
-        while end < line.endIndex, line[end] == character {
-            length += 1
-            end = line.index(after: end)
-        }
-
-        guard length >= 3 else {
-            return nil
-        }
-
-        return FenceMarker(character: character, length: length, suffix: String(line[end...]))
-    }
-
-    private static func trailingNewlineCount(
-        in characters: AttributedString.CharacterView,
-        before offset: Int
-    ) -> Int {
-        guard offset <= characters.count else {
-            return 0
-        }
-
-        let end = characters.index(characters.startIndex, offsetBy: offset)
-        return characters[..<end].reversed().prefix { $0 == "\n" }.count
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&#39;")
     }
 }

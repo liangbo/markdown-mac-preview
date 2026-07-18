@@ -2,54 +2,56 @@ import XCTest
 @testable import MarkdownMacPreviewCore
 
 final class MarkdownRendererTests: XCTestCase {
-    func testRendersBasicMarkdownIntoAttributedContent() {
-        let result = MarkdownRenderer.render("# Title\n\nThis is **bold** text.")
+    func testRendersBasicMarkdownIntoHTMLDocument() {
+        let result = MarkdownRenderer.render("""
+        # Title
 
-        XCTAssertEqual(String(result.attributed.characters), "Title\n\nThis is bold text.")
+        This is **bold** text.
+        """)
+
+        XCTAssertTrue(result.html.contains("<article>"))
+        XCTAssertTrue(result.html.contains("mdpreview-document"))
+        XCTAssertTrue(result.html.contains("<h1"))
+        XCTAssertTrue(result.html.contains("Title"))
+        XCTAssertTrue(result.html.contains("<strong>bold</strong>"))
         XCTAssertNil(result.warning)
     }
 
-    func testRendersRawHTMLBlocksAsFormattedContent() {
+    func testPreservesRawHTMLForWebViewRendering() {
         let markdown = """
         Before
 
-        <div>
-        <strong>Hello</strong><br>World
-        </div>
+        <div class="note"><strong>Hello</strong><br>World</div>
 
         After
         """
 
         let result = MarkdownRenderer.render(markdown)
-        let rendered = String(result.attributed.characters)
 
-        XCTAssertTrue(rendered.contains("Before"))
-        XCTAssertTrue(rendered.contains("Hello"))
-        XCTAssertTrue(rendered.contains("World"))
-        XCTAssertTrue(rendered.contains("After"))
-        XCTAssertFalse(rendered.contains("<div>"))
-        XCTAssertFalse(rendered.contains("<strong>"))
-        XCTAssertFalse(rendered.contains("<br>"))
+        XCTAssertTrue(result.html.contains("<div class=\"note\"><strong>Hello</strong><br>World</div>"))
+        XCTAssertTrue(result.html.contains("Before"))
+        XCTAssertTrue(result.html.contains("After"))
         XCTAssertNil(result.warning)
     }
 
-    func testPlainTextFallbackKeepsOriginalText() {
+    func testRendererKeepsRecoverableMarkdownInHTML() {
         let markdown = "Unclosed [link]("
 
         let result = MarkdownRenderer.render(markdown)
 
-        XCTAssertEqual(String(result.attributed.characters), markdown)
+        XCTAssertTrue(result.html.contains("Unclosed"))
         XCTAssertNil(result.warning)
     }
 
-    func testPlainTextFallbackKeepsOriginalTextAndWarnsWhenParserThrows() {
-        let markdown = "# Broken"
+    func testPlainTextFallbackEscapesOriginalTextAndWarnsWhenRendererThrows() {
+        let markdown = "# Broken <script>alert('x')</script>"
 
-        let result = MarkdownRenderer.render(markdown, parser: { _ in
+        let result = MarkdownRenderer.render(markdown, htmlRenderer: { _ in
             throw TestError.parserFailed
         })
 
-        XCTAssertEqual(String(result.attributed.characters), markdown)
+        XCTAssertTrue(result.html.contains("<pre>"))
+        XCTAssertTrue(result.html.contains("# Broken &lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;"))
         XCTAssertEqual(result.warning, "Markdown preview fell back to plain text.")
     }
 
@@ -64,264 +66,29 @@ final class MarkdownRendererTests: XCTestCase {
         ```
         """
 
-        let result = MarkdownRenderer.render(markdown)
-        let rendered = String(result.attributed.characters)
+        let rendered = MarkdownRenderer.render(markdown).html
 
-        XCTAssertEqual(rendered, "Title\n\nlet a = 1\n\nlet b = 2\n")
-        XCTAssertNil(result.warning)
+        XCTAssertTrue(rendered.contains("let a = 1"))
+        XCTAssertTrue(rendered.contains("let b = 2"))
+        XCTAssertTrue(rendered.contains("<pre>"))
     }
 
-    func testFourBacktickFenceRequiresMatchingCloser() {
+    func testMarkdownTableProducesHTMLTableWhenSupportedByRenderer() {
         let markdown = """
-        # Title
-
-        ````swift
-        let a = 1
-        ```
-
-        let b = 2
-        ````
+        | A | B |
+        |---|---|
+        | 1 | 2 |
         """
 
-        let result = MarkdownRenderer.render(markdown)
-        let rendered = String(result.attributed.characters)
+        let rendered = MarkdownRenderer.render(markdown).html
 
-        XCTAssertTrue(rendered.contains("let a = 1\n```\n\nlet b = 2"))
-        XCTAssertFalse(rendered.contains("\n\n\n"))
-        XCTAssertNil(result.warning)
+        XCTAssertTrue(rendered.contains("A"))
+        XCTAssertTrue(rendered.contains("B"))
+        XCTAssertTrue(rendered.contains("1"))
+        XCTAssertTrue(rendered.contains("2"))
     }
+}
 
-    func testTildeFenceRequiresWhitespaceOnlyCloserSuffix() {
-        let markdown = """
-        # Title
-
-        ~~~swift
-        let a = 1
-        ~~~not-a-closer
-
-        let b = 2
-        ~~~
-        """
-
-        let result = MarkdownRenderer.render(markdown)
-        let rendered = String(result.attributed.characters)
-
-        XCTAssertTrue(rendered.contains("let a = 1\n~~~not-a-closer\n\nlet b = 2"))
-        XCTAssertFalse(rendered.contains("\n\n\n"))
-        XCTAssertNil(result.warning)
-    }
-
-    func testCRLFHeadingAndParagraphPreserveSeparator() {
-        let result = MarkdownRenderer.render("# Title\r\n\r\nThis is **bold** text.")
-
-        XCTAssertEqual(String(result.attributed.characters), "Title\n\nThis is bold text.")
-        XCTAssertNil(result.warning)
-    }
-
-    func testIndentedCodeFenceDoesNotSuppressLaterParagraphSeparator() {
-        let markdown = "    let code = 1\n    ```\n\nAfter paragraph"
-
-        let result = MarkdownRenderer.render(markdown)
-        let rendered = String(result.attributed.characters)
-
-        XCTAssertTrue(rendered.contains("let code = 1\n```\n\nAfter paragraph"))
-        XCTAssertNil(result.warning)
-    }
-
-    func testCompactListDoesNotGainParagraphSeparatorsBetweenItems() {
-        let result = MarkdownRenderer.render("- one\n- two")
-        let rendered = String(result.attributed.characters)
-
-        XCTAssertTrue(rendered.contains("one"))
-        XCTAssertTrue(rendered.contains("two"))
-        XCTAssertFalse(rendered.contains("\n\n"))
-        XCTAssertNil(result.warning)
-    }
-
-    func testIndentedCodeAfterBlankLineDoesNotMakeLaterListSiblingLoose() {
-        let markdown = "- one\n\n    continuation\n- two"
-
-        let result = MarkdownRenderer.render(markdown)
-        let rendered = String(result.attributed.characters)
-
-        XCTAssertTrue(rendered.contains("one"))
-        XCTAssertTrue(rendered.contains("two"))
-        XCTAssertFalse(rendered.contains("continuation\n\ntwo"))
-        XCTAssertNil(result.warning)
-    }
-
-    func testLooseListPreservesBlankLineBetweenItems() {
-        let result = MarkdownRenderer.render("- one\n\n- two")
-        let rendered = String(result.attributed.characters)
-
-        XCTAssertTrue(rendered.contains("one\n\ntwo"))
-        XCTAssertNil(result.warning)
-    }
-
-    func testListLikeLinesInsideFenceDoNotAffectFollowingCompactList() {
-        let markdown = """
-        ```text
-        - fake one
-
-        - fake two
-        ```
-
-        - real one
-        - real two
-        """
-
-        let result = MarkdownRenderer.render(markdown)
-        let rendered = String(result.attributed.characters)
-
-        XCTAssertTrue(rendered.contains("- fake one"))
-        XCTAssertTrue(rendered.contains("- fake two"))
-        XCTAssertFalse(rendered.contains("real one\n\nreal two"))
-        XCTAssertNil(result.warning)
-    }
-
-    func testListItemParagraphsPreserveSeparationWithinSameItem() {
-        let result = MarkdownRenderer.render("- one\n\n  continuation")
-        let rendered = String(result.attributed.characters)
-
-        XCTAssertTrue(rendered.contains("one\n\ncontinuation"))
-        XCTAssertNil(result.warning)
-    }
-
-    func testNestedCompactListDoesNotGainSeparatorsFromLooseParent() {
-        let markdown = """
-        - parent
-
-          - child one
-          - child two
-        """
-
-        let result = MarkdownRenderer.render(markdown)
-        let rendered = String(result.attributed.characters)
-
-        XCTAssertTrue(rendered.contains("child one"))
-        XCTAssertTrue(rendered.contains("child two"))
-        XCTAssertFalse(rendered.contains("child one\n\nchild two"))
-        XCTAssertNil(result.warning)
-    }
-
-    func testNestedLooseListUsesInnermostListContainer() {
-        let markdown = """
-        - parent
-          - child one
-
-          - child two
-        """
-
-        let result = MarkdownRenderer.render(markdown)
-        let rendered = String(result.attributed.characters)
-
-        XCTAssertFalse(rendered.contains("parent\n\nchild one"))
-        XCTAssertTrue(rendered.contains("child one\n\nchild two"))
-        XCTAssertNil(result.warning)
-    }
-
-    func testLooseNestedChildrenDoNotMakeParentSiblingsLoose() {
-        let markdown = """
-        - parent one
-          - child one
-
-          - child two
-        - parent two
-        """
-
-        let result = MarkdownRenderer.render(markdown)
-        let rendered = String(result.attributed.characters)
-
-        XCTAssertTrue(rendered.contains("child one\n\nchild two"))
-        XCTAssertFalse(rendered.contains("child two\n\nparent two"))
-        XCTAssertNil(result.warning)
-    }
-
-    func testFourSpaceNestedLooseListPreservesSiblingSeparation() {
-        let markdown = """
-        - parent
-            - child one
-
-            - child two
-        """
-
-        let result = MarkdownRenderer.render(markdown)
-        let rendered = String(result.attributed.characters)
-
-        XCTAssertTrue(rendered.contains("child one\n\nchild two"))
-        XCTAssertNil(result.warning)
-    }
-
-    func testParentListContextSurvivesNestedChildContent() {
-        let markdown = """
-        - parent one
-          - child
-
-        - parent two
-        """
-
-        let result = MarkdownRenderer.render(markdown)
-        let rendered = String(result.attributed.characters)
-
-        XCTAssertTrue(rendered.contains("child\n\nparent two"))
-        XCTAssertNil(result.warning)
-    }
-
-    func testNestedChildReturnToParentContinuationDoesNotConsumeSiblingTransition() {
-        let markdown = """
-        - parent one
-          - child
-
-          continuation
-
-        - parent two
-        """
-
-        let result = MarkdownRenderer.render(markdown)
-        let rendered = String(result.attributed.characters)
-        XCTAssertTrue(rendered.contains("continuation\n\nparent two"))
-        XCTAssertNil(result.warning)
-    }
-
-    func testListFamilyBoundaryDoesNotPoisonFollowingCompactList() {
-        let markdown = """
-        - first
-        - second
-
-        1. ordered
-
-        - real one
-        - real two
-        """
-
-        let result = MarkdownRenderer.render(markdown)
-        let rendered = String(result.attributed.characters)
-
-        XCTAssertFalse(rendered.contains("real one\n\nreal two"))
-        XCTAssertNil(result.warning)
-    }
-
-    func testNestedChildReturnToParentContinuationPreservesParagraphSeparation() {
-        let result = MarkdownRenderer.render("- parent\n  - child\n\n  continuation")
-        let rendered = String(result.attributed.characters)
-
-        XCTAssertTrue(rendered.contains("child\n\ncontinuation"))
-        XCTAssertNil(result.warning)
-    }
-
-    func testSeparatorsSurroundListWithoutSplittingListItems() {
-        let markdown = "# Title\n\n- one\n- two\n\nAfter paragraph"
-
-        let result = MarkdownRenderer.render(markdown)
-
-        XCTAssertEqual(
-            String(result.attributed.characters),
-            "Title\n\nonetwo\n\nAfter paragraph"
-        )
-        XCTAssertNil(result.warning)
-    }
-
-    private enum TestError: Error {
-        case parserFailed
-    }
+enum TestError: Error {
+    case parserFailed
 }

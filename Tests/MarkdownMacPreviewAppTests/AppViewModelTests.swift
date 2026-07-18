@@ -1,4 +1,5 @@
 import XCTest
+import MarkdownMacPreviewCore
 @testable import MarkdownMacPreviewApp
 
 @MainActor
@@ -42,6 +43,29 @@ final class AppViewModelTests: XCTestCase {
         XCTAssertTrue(renderedText.contains("New"))
         XCTAssertTrue(renderedText.contains("Live preview text"))
         XCTAssertTrue(viewModel.document?.isDirty == true)
+    }
+
+    func testPreviewContentIsCachedUntilDocumentContentChanges() throws {
+        let url = try makeMarkdownFile(named: "cached.md", content: "# Cached")
+        var renderCount = 0
+        let viewModel = AppViewModel(
+            recentFilesStore: store,
+            previewRenderer: { markdown in
+                renderCount += 1
+                return MarkdownPreviewContent(attributed: AttributedString(markdown))
+            }
+        )
+        viewModel.loadDocument(from: url)
+
+        _ = viewModel.previewContent
+        _ = viewModel.previewContent
+
+        XCTAssertEqual(renderCount, 1)
+
+        viewModel.updateContent("# Changed")
+        _ = viewModel.previewContent
+
+        XCTAssertEqual(renderCount, 2)
     }
 
     private func makeMarkdownFile(named name: String, content: String) throws -> URL {

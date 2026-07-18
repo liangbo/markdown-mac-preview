@@ -24,9 +24,11 @@ public enum MarkdownRenderer {
         _ markdown: String,
         parser: (String) throws -> AttributedString
     ) -> MarkdownPreviewContent {
+        let renderableMarkdown = replacingRawHTML(in: markdown)
+
         do {
-            var attributed = try parser(markdown)
-            insertMissingBlockSeparators(into: &attributed, markdown: markdown)
+            var attributed = try parser(renderableMarkdown)
+            insertMissingBlockSeparators(into: &attributed, markdown: renderableMarkdown)
             return MarkdownPreviewContent(attributed: attributed)
         } catch {
             return MarkdownPreviewContent(
@@ -34,6 +36,84 @@ public enum MarkdownRenderer {
                 warning: "Markdown preview fell back to plain text."
             )
         }
+    }
+
+    private static func replacingRawHTML(in markdown: String) -> String {
+        var lines: [String] = []
+        var fence: FenceMarker?
+
+        for rawLine in markdown.components(separatedBy: "\n") {
+            let line = rawLine.hasSuffix("\r") ? String(rawLine.dropLast()) : rawLine
+            let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+
+            if let activeFence = fence {
+                lines.append(line)
+                if let closingFence = fenceMarker(in: trimmedLine),
+                   closingFence.character == activeFence.character,
+                   closingFence.length >= activeFence.length,
+                   closingFence.suffix.trimmingCharacters(in: .whitespaces).isEmpty {
+                    fence = nil
+                }
+                continue
+            }
+
+            let leadingSpaces = line.prefix { $0 == " " }.count
+            if leadingSpaces <= 3, let openingFence = fenceMarker(in: trimmedLine) {
+                fence = openingFence
+                lines.append(line)
+                continue
+            }
+
+            lines.append(replacingInlineHTML(in: line))
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
+    private static func replacingInlineHTML(in line: String) -> String {
+        guard line.contains("<") else {
+            return decodingHTMLEntities(in: line)
+        }
+
+        var rendered = line
+        let replacements: [(String, String)] = [
+            (#"(?i)<\s*br\s*/?\s*>"#, "\n"),
+            (#"(?i)<\s*li(?:\s+[^>]*)?>"#, "- "),
+            (#"(?i)<\s*/\s*li\s*>"#, "\n"),
+            (#"(?i)<\s*(?:strong|b)(?:\s+[^>]*)?>"#, "**"),
+            (#"(?i)<\s*/\s*(?:strong|b)\s*>"#, "**"),
+            (#"(?i)<\s*(?:em|i)(?:\s+[^>]*)?>"#, "*"),
+            (#"(?i)<\s*/\s*(?:em|i)\s*>"#, "*"),
+            (#"(?i)<\s*code(?:\s+[^>]*)?>"#, "`"),
+            (#"(?i)<\s*/\s*code\s*>"#, "`"),
+            (#"(?i)<\s*/\s*t[dh]\s*>"#, " | "),
+            (#"(?i)<\s*t[dh](?:\s+[^>]*)?>"#, ""),
+            (#"(?i)<\s*/\s*tr\s*>"#, "\n"),
+            (#"(?i)<\s*tr(?:\s+[^>]*)?>"#, ""),
+            (#"(?i)<\s*/\s*(?:p|div|section|article|header|footer|blockquote|h[1-6]|table|thead|tbody|ul|ol)\s*>"#, "\n\n"),
+            (#"(?i)<\s*(?:p|div|section|article|header|footer|blockquote|h[1-6]|table|thead|tbody|ul|ol)(?:\s+[^>]*)?>"#, ""),
+            (#"(?i)<[^>]+>"#, "")
+        ]
+
+        for (pattern, replacement) in replacements {
+            rendered = rendered.replacingOccurrences(
+                of: pattern,
+                with: replacement,
+                options: .regularExpression
+            )
+        }
+
+        return decodingHTMLEntities(in: rendered)
+    }
+
+    private static func decodingHTMLEntities(in text: String) -> String {
+        text
+            .replacingOccurrences(of: "&nbsp;", with: " ")
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&#39;", with: "'")
     }
 
     private static func insertMissingBlockSeparators(

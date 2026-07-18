@@ -12,14 +12,29 @@ final class AppViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     private let recentFilesStore: RecentFilesStore
+    private let previewRenderer: (String) -> MarkdownPreviewContent
+    private var cachedPreviewContent: MarkdownPreviewContent?
+    private var cachedPreviewSource: String?
 
-    init(recentFilesStore: RecentFilesStore = RecentFilesStore()) {
+    init(
+        recentFilesStore: RecentFilesStore = RecentFilesStore(),
+        previewRenderer: @escaping (String) -> MarkdownPreviewContent = MarkdownRenderer.render
+    ) {
         self.recentFilesStore = recentFilesStore
+        self.previewRenderer = previewRenderer
         recentFiles = recentFilesStore.load()
     }
 
     var previewContent: MarkdownPreviewContent {
-        MarkdownRenderer.render(document?.content ?? "")
+        let source = document?.content ?? ""
+        if cachedPreviewSource == source, let cachedPreviewContent {
+            return cachedPreviewContent
+        }
+
+        let renderedContent = previewRenderer(source)
+        cachedPreviewSource = source
+        cachedPreviewContent = renderedContent
+        return renderedContent
     }
 
     var hasDocument: Bool {
@@ -50,6 +65,7 @@ final class AppViewModel: ObservableObject {
     func loadDocument(from url: URL) {
         do {
             document = try MarkdownDocument.load(from: url)
+            invalidatePreviewCache()
             recentFiles = recentFilesStore.record(url)
             isEditorVisible = false
             errorMessage = nil
@@ -78,6 +94,7 @@ final class AppViewModel: ObservableObject {
 
     func updateContent(_ content: String) {
         document?.updateContent(content)
+        invalidatePreviewCache()
     }
 
     func saveDocument() {
@@ -88,6 +105,7 @@ final class AppViewModel: ObservableObject {
         do {
             try currentDocument.save()
             document = currentDocument
+            invalidatePreviewCache()
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -124,5 +142,10 @@ final class AppViewModel: ObservableObject {
             return
         }
         isEditorVisible.toggle()
+    }
+
+    private func invalidatePreviewCache() {
+        cachedPreviewSource = nil
+        cachedPreviewContent = nil
     }
 }

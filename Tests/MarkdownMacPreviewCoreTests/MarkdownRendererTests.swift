@@ -9,6 +9,30 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertNil(result.warning)
     }
 
+    func testRendersRawHTMLBlocksAsFormattedContent() {
+        let markdown = """
+        Before
+
+        <div>
+        <strong>Hello</strong><br>World
+        </div>
+
+        After
+        """
+
+        let result = MarkdownRenderer.render(markdown)
+        let rendered = String(result.attributed.characters)
+
+        XCTAssertTrue(rendered.contains("Before"))
+        XCTAssertTrue(rendered.contains("Hello"))
+        XCTAssertTrue(rendered.contains("World"))
+        XCTAssertTrue(rendered.contains("After"))
+        XCTAssertFalse(rendered.contains("<div>"))
+        XCTAssertFalse(rendered.contains("<strong>"))
+        XCTAssertFalse(rendered.contains("<br>"))
+        XCTAssertNil(result.warning)
+    }
+
     func testPlainTextFallbackKeepsOriginalText() {
         let markdown = "Unclosed [link]("
 

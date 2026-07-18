@@ -32,6 +32,42 @@ final class RecentFilesStoreTests: XCTestCase {
         XCTAssertEqual(files.map(\.url), [first.standardizedFileURL, second.standardizedFileURL])
     }
 
+    func testRecordExistingFileCanPreserveManualOrder() {
+        let first = URL(fileURLWithPath: "/tmp/first.md")
+        let second = URL(fileURLWithPath: "/tmp/second.md")
+        _ = store.record(first)
+        _ = store.record(second)
+
+        let files = store.record(first, promoteExisting: false)
+
+        XCTAssertEqual(files.map(\.url), [second.standardizedFileURL, first.standardizedFileURL])
+        XCTAssertEqual(store.load().map(\.url), [second.standardizedFileURL, first.standardizedFileURL])
+    }
+
+    func testRecordNewFileStillAddsNewestFirstWhenPromotionDisabled() {
+        let first = URL(fileURLWithPath: "/tmp/first.md")
+        let second = URL(fileURLWithPath: "/tmp/second.md")
+        _ = store.record(first)
+
+        let files = store.record(second, promoteExisting: false)
+
+        XCTAssertEqual(files.map(\.url), [second.standardizedFileURL, first.standardizedFileURL])
+    }
+
+    func testReorderPersistsManualRecentFileOrder() {
+        let first = URL(fileURLWithPath: "/tmp/first.md")
+        let second = URL(fileURLWithPath: "/tmp/second.md")
+        let third = URL(fileURLWithPath: "/tmp/third.md")
+        _ = store.record(first)
+        _ = store.record(second)
+        _ = store.record(third)
+
+        let files = store.reorder(fromOffsets: IndexSet(integer: 2), toOffset: 0)
+
+        XCTAssertEqual(files.map(\.url), [first.standardizedFileURL, third.standardizedFileURL, second.standardizedFileURL])
+        XCTAssertEqual(store.load().map(\.url), [first.standardizedFileURL, third.standardizedFileURL, second.standardizedFileURL])
+    }
+
     func testRecordCapsRecentFilesAtLimit() {
         store = RecentFilesStore(defaults: defaults, key: "recent-files-test", limit: 3)
 

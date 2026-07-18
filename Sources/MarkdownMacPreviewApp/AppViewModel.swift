@@ -63,10 +63,14 @@ final class AppViewModel: ObservableObject {
     }
 
     func loadDocument(from url: URL) {
+        loadDocument(from: url, promoteExistingRecentFile: true)
+    }
+
+    private func loadDocument(from url: URL, promoteExistingRecentFile: Bool) {
         do {
             document = try MarkdownDocument.load(from: url)
             invalidatePreviewCache()
-            recentFiles = recentFilesStore.record(url)
+            recentFiles = recentFilesStore.record(url, promoteExisting: promoteExistingRecentFile)
             isEditorVisible = false
             errorMessage = nil
         } catch {
@@ -85,11 +89,15 @@ final class AppViewModel: ObservableObject {
             return
         }
 
-        loadDocument(from: recentFile.url)
+        loadDocument(from: recentFile.url, promoteExistingRecentFile: false)
     }
 
     func removeRecentFile(_ recentFile: RecentFile) {
         recentFiles = recentFilesStore.remove(recentFile.url)
+    }
+
+    func moveRecentFiles(fromOffsets source: IndexSet, toOffset destination: Int) {
+        recentFiles = recentFilesStore.reorder(fromOffsets: source, toOffset: destination)
     }
 
     func updateContent(_ content: String) {

@@ -41,15 +41,28 @@ final class RecentFilesStore {
     }
 
     @discardableResult
-    func record(_ url: URL) -> [RecentFile] {
+    func record(_ url: URL, promoteExisting: Bool = true) -> [RecentFile] {
         guard Self.isSupportedMarkdownURL(url) else {
             return load()
         }
 
         let standardizedURL = url.standardizedFileURL
-        var files = load().filter { $0.url != standardizedURL }
+        var files = load()
+        if !promoteExisting, files.contains(where: { $0.url == standardizedURL }) {
+            return files
+        }
+
+        files = files.filter { $0.url != standardizedURL }
         files.insert(RecentFile(url: standardizedURL), at: 0)
         files = Array(files.prefix(limit))
+        save(files)
+        return files
+    }
+
+    @discardableResult
+    func reorder(fromOffsets source: IndexSet, toOffset destination: Int) -> [RecentFile] {
+        var files = load()
+        files.move(fromOffsets: source, toOffset: destination)
         save(files)
         return files
     }

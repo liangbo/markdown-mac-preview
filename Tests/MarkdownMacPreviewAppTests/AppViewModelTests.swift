@@ -32,6 +32,34 @@ final class AppViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.recentFiles.map(\.url), [url.standardizedFileURL])
     }
 
+    func testOpenRecentFileDoesNotPromoteItToTop() throws {
+        let first = try makeMarkdownFile(named: "first.md", content: "# First")
+        let second = try makeMarkdownFile(named: "second.md", content: "# Second")
+        let viewModel = AppViewModel(recentFilesStore: store)
+        viewModel.loadDocument(from: first)
+        viewModel.loadDocument(from: second)
+
+        viewModel.openRecentFile(RecentFile(url: first.standardizedFileURL))
+
+        XCTAssertEqual(viewModel.document?.fileURL, first.standardizedFileURL)
+        XCTAssertEqual(viewModel.recentFiles.map(\.url), [second.standardizedFileURL, first.standardizedFileURL])
+    }
+
+    func testMoveRecentFilesPersistsManualOrder() throws {
+        let first = try makeMarkdownFile(named: "first.md", content: "# First")
+        let second = try makeMarkdownFile(named: "second.md", content: "# Second")
+        let third = try makeMarkdownFile(named: "third.md", content: "# Third")
+        let viewModel = AppViewModel(recentFilesStore: store)
+        viewModel.loadDocument(from: first)
+        viewModel.loadDocument(from: second)
+        viewModel.loadDocument(from: third)
+
+        viewModel.moveRecentFiles(fromOffsets: IndexSet(integer: 2), toOffset: 0)
+
+        XCTAssertEqual(viewModel.recentFiles.map(\.url), [first.standardizedFileURL, third.standardizedFileURL, second.standardizedFileURL])
+        XCTAssertEqual(store.load().map(\.url), [first.standardizedFileURL, third.standardizedFileURL, second.standardizedFileURL])
+    }
+
     func testPreviewUsesUnsavedEditedContent() throws {
         let url = try makeMarkdownFile(named: "draft.md", content: "# Old")
         let viewModel = AppViewModel(recentFilesStore: store)

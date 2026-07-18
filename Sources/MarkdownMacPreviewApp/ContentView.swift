@@ -17,19 +17,14 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            toolbar
-
-            Divider()
-
-            HStack(spacing: 0) {
+            HSplitView {
                 RecentFilesSidebarView(
                     recentFiles: viewModel.recentFiles,
                     selectedURL: viewModel.document?.fileURL,
                     open: viewModel.openRecentFile,
-                    remove: viewModel.removeRecentFile
+                    remove: viewModel.removeRecentFile,
+                    move: viewModel.moveRecentFiles
                 )
-
-                Divider()
 
                 if viewModel.hasDocument {
                     documentBody
@@ -48,29 +43,6 @@ struct ContentView: View {
                 warningMessage: viewModel.previewContent.warning
             )
         }
-    }
-
-    private var toolbar: some View {
-        HStack(spacing: 8) {
-            Button("Open") {
-                viewModel.openDocument()
-            }
-
-            Button("Save") {
-                viewModel.saveDocument()
-            }
-            .disabled(!viewModel.canSave)
-
-            Button(viewModel.isEditorVisible ? "Hide Editor" : "Edit") {
-                viewModel.toggleEditor()
-            }
-            .disabled(!viewModel.hasDocument)
-
-            Spacer()
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     private var documentBody: some View {

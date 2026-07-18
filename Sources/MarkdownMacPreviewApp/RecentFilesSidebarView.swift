@@ -5,6 +5,7 @@ struct RecentFilesSidebarView: View {
     let selectedURL: URL?
     let open: (RecentFile) -> Void
     let remove: (RecentFile) -> Void
+    let move: (IndexSet, Int) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -21,37 +22,43 @@ struct RecentFilesSidebarView: View {
                     .padding(.horizontal, 12)
                     .padding(.top, 4)
             } else {
-                List(recentFiles) { file in
-                    Button {
-                        open(file)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(file.fileName)
-                                .font(.body)
-                                .lineLimit(1)
-                            Text(file.parentPath)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
+                List {
+                    ForEach(recentFiles) { file in
+                        row(for: file)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            open(file)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 4)
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button("Remove from Recent") {
-                            remove(file)
+                        .contextMenu {
+                            Button("Remove from Recent") {
+                                remove(file)
+                            }
                         }
+                        .listRowBackground(rowBackground(for: file))
                     }
-                    .listRowBackground(rowBackground(for: file))
+                    .onMove(perform: move)
                 }
                 .listStyle(.sidebar)
             }
 
             Spacer(minLength: 0)
         }
-        .frame(minWidth: 220, idealWidth: 240, maxWidth: 300)
+        .frame(minWidth: 150, idealWidth: 168, maxWidth: 260)
         .background(Color(nsColor: .controlBackgroundColor))
+    }
+
+    private func row(for file: RecentFile) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(file.fileName)
+                .font(.body)
+                .lineLimit(1)
+            Text(file.parentPath)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 4)
     }
 
     private func rowBackground(for file: RecentFile) -> Color {

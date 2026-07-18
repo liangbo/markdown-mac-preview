@@ -27,6 +27,10 @@ let package = Package(
         .testTarget(
             name: "MarkdownMacPreviewCoreTests",
             dependencies: ["MarkdownMacPreviewCore"]
+        ),
+        .testTarget(
+            name: "MarkdownMacPreviewAppTests",
+            dependencies: ["MarkdownMacPreviewApp", "MarkdownMacPreviewCore"]
         )
     ]
 )

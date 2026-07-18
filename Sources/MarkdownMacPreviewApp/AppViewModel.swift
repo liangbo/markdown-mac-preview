@@ -7,8 +7,16 @@ import UniformTypeIdentifiers
 @MainActor
 final class AppViewModel: ObservableObject {
     @Published private(set) var document: MarkdownDocument?
+    @Published private(set) var recentFiles: [RecentFile]
     @Published var isEditorVisible = false
     @Published var errorMessage: String?
+
+    private let recentFilesStore: RecentFilesStore
+
+    init(recentFilesStore: RecentFilesStore = RecentFilesStore()) {
+        self.recentFilesStore = recentFilesStore
+        recentFiles = recentFilesStore.load()
+    }
 
     var previewContent: MarkdownPreviewContent {
         MarkdownRenderer.render(document?.content ?? "")
@@ -42,11 +50,30 @@ final class AppViewModel: ObservableObject {
     func loadDocument(from url: URL) {
         do {
             document = try MarkdownDocument.load(from: url)
+            recentFiles = recentFilesStore.record(url)
             isEditorVisible = false
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    func openRecentFile(_ recentFile: RecentFile) {
+        guard FileManager.default.fileExists(atPath: recentFile.url.path) else {
+            recentFiles = recentFilesStore.remove(recentFile.url)
+            errorMessage = "Recent file no longer exists: \(recentFile.fileName)"
+            return
+        }
+
+        guard confirmDiscardIfNeeded() else {
+            return
+        }
+
+        loadDocument(from: recentFile.url)
+    }
+
+    func removeRecentFile(_ recentFile: RecentFile) {
+        recentFiles = recentFilesStore.remove(recentFile.url)
     }
 
     func updateContent(_ content: String) {
